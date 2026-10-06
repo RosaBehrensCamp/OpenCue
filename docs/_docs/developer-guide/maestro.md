@@ -72,13 +72,15 @@ procs first). That pipeline:
       dispatchable layers that match the group, ranked by a **priority-weighted
       lottery** (§3.5), not a strict priority sort.
    2. **Dispatch** (`dispatchGroupWithScoring`): placement slots by lottery.
-      Every slot goes to a candidate drawn with probability proportional to its
-      job priority among the candidates that can still place (`drawSlot`); the
+      Every slot goes first to the show with the lowest subscription tier on
+      the allocation (§3.5.1), then to one of its candidates drawn with
+      probability proportional to its job priority among those that can still
+      place (`stampTiers`, `headWeight`, `drawSlot`); the
       winner scores every fitting host, takes the lowest score, records the
       placement and decrements the in-memory snapshot (`placeOnce`). Slots
       repeat until no candidate can place, so a lone layer takes every fitting
-      host in one tick and contending layers share the tick in proportion to
-      their weight. A layer planned in an earlier group enters with only its
+      host in one tick and, within a show's tier, contending layers share the
+      tick in proportion to their weight. A layer planned in an earlier group enters with only its
       remaining frames (`takeTickWideRemainder`). A candidate that stays
       blocked long enough and is wide enough records a reservation *request*.
 4. **Grant reservations**: after all groups, order the requests by a
@@ -337,9 +339,13 @@ legacy dispatcher, which sorted strictly by `priority DESC` and so gave every fr
 core to the highest-priority work until it drained — starving everything below it
 while a high-priority backlog stayed full.
 
-**What this means for operators.** Priority now buys a *share*, not dominance. A
-show at priority 120 vs one at 100 wins roughly `120/(120+100) ≈ 55%` of the
-contested selections, not 100%. Two consequences:
+**What this means for operators.** Priority now buys a *share*, not dominance,
+and only among work that shares a tier (§3.5.1): between shows on one allocation,
+subscription size decides; priority splits a show's slice among its layers (and
+among shows tied on tier). A job at priority 120 vs one at 100 in the same show
+wins roughly `120/(120+100) ≈ 55%` of the contested selections, not 100%. With
+equal (or zero) sizes, shows on an allocation converge to equal cores whatever
+their jobs' priorities; set sizes to give shows unequal shares. Two consequences:
 
 - **Re-spread clustered values.** If your priority numbers were calibrated for
   rank semantics they often cluster in a narrow band (e.g. 90–110). Under the
@@ -349,9 +355,10 @@ contested selections, not 100%. Two consequences:
   depends on backlog composition: a stream with far more waiting layers is
   over-represented in the candidate pool, so it lands more selections than its
   bare priority ratio suggests, and a thin low-priority stream lands fewer. The
-  firm guarantee the lottery provides is **anti-starvation** — any eligible layer
-  keeps a nonzero, priority-weighted chance every tick and never waits behind a
-  saturating higher-priority backlog forever. `GREATEST(priority, 1)` floors the
+  firm guarantee the lottery provides is **anti-starvation** within a tier — any
+  eligible layer keeps a nonzero, priority-weighted chance whenever its show
+  holds the lowest tier, and never waits behind a saturating higher-priority
+  backlog of its own show forever. `GREATEST(priority, 1)` floors the
   weight so priority 0 or negative still draws the minimum nonzero share.
 
 **Reservation granting uses the same lottery.** The scarce reservation budget is
@@ -359,6 +366,21 @@ handed out in priority-weighted lottery order too (`sortByPriorityLottery`;
 §3.2), so a low-priority wide job still wins a grant now and then and is not
 starved by a higher-priority stream. Reservations are firm, so a lottery win is
 never clawed back.
+
+### 3.5.1 Subscription size: the lowest tier draws first
+
+A subscription gives a show a **size** (its guaranteed share of an allocation)
+and a **burst** (its ceiling). Between shows, size decides: every placement slot
+goes to the show with the lowest **tier** on the allocation, cores in use over
+size (`showTier`, the database's `tier()` function), read tick-wide so this
+tick's placements count. A show running nothing sorts first. A show with no
+size has tier = its whole cores plus one, so it sorts above every show still
+under its size, but a sized show far enough over its size can sort above it. Inside that show the
+priority lottery above picks the layer. A show whose candidates can place
+nothing leaves the draw and the slot goes to the next tier in the same tick, so
+the rule orders work and never idles a host. Under contention shows converge to
+their sizes in proportion, as on the legacy dispatcher; the SHOWTIER scenario
+asserts it.
 
 ### 3.6 Limit-gated placement (application licenses)
 
@@ -519,11 +541,18 @@ the layer mid-job; this feature is that loop inside the scheduler. It has no
 configuration beyond one policy ratio: constants live in the code, and the
 metric either derives from the farm or is pinned by `maestro.mem_per_core`.
 
-Every RQD host report feeds `LayerLiveMem`, an in-memory ledger of each
-layer's recent per-frame rss peaks (last 32 frames, no SQL). The layer's size
-is the MEDIAN of those peaks over at least 4 sampled frames: declarations are
-never trusted for cores, and a single haywire process is one sample and
-cannot resize a layer (the leaker itself stays the OOM machinery's problem).
+Every RQD host report and every successful frame completion feeds
+`LayerLiveMem`, an in-memory ledger of each layer's recent per-frame rss
+peaks (last 32 frames, no SQL). A host report carries a running frame's
+peak so far, so a layer is sized while its first frames still climb; a
+completion carries the frame's final peak and replaces its running samples,
+so a retried frame is sampled afresh. An OOM kill is recorded too, a lower
+bound of the layer's appetite. A layer's samples are kept for 12 hours, long
+enough to outlast its longest frames. The
+layer's size is the MEDIAN of those peaks over at least 4 sampled frames:
+declarations are never trusted for cores, and a single haywire process is
+one sample and cannot resize a layer (the leaker itself stays the OOM
+machinery's problem).
 Before placement, a threadable layer with evidence is resized to
 `round(rss / the group's own memory-per-core)` cores and `max(declared, rss)`
 memory, so the placement score, the fit check, every cap and the booking all
@@ -540,12 +569,27 @@ Maestro scored: no divergence.
 The contract for artists and service defaults: setting cores to 1 on a
 threadable layer means "let the system decide". Such a layer, before any rss
 evidence exists, runs at most 8 probe frames (about one report cycle) while
-the farm looks at what it really uses; then every later launch books at its
+the farm looks at what they really use; then every later launch books at its
 true size. An explicit ask of 2 or more cores was sized by a person and books
 at full speed from frame one, corrected only upward. A held layer that
 completes a probe's worth of frames without ever landing in a report runs
 too fast to sample and is released, never starved. Cuebot restarts empty the
 ledger; active layers repopulate it within one report cycle.
+
+**The grant never exceeds the group's largest host**, since a grant no host
+holds fits nowhere; a frame that needs more memory than the largest host has
+per core takes the whole host and no more. A non-threadable layer keeps its
+cores but its memory is sized the same way.
+Under Maestro the legacy report path no longer raises a managed layer's
+memory ask to the largest rss any one frame reported: the median sizes the
+layer, and only repeated OOMs raise it (`OomMemoryTracker`), so one outlier never
+sets every remaining frame's memory and strands the cores beside them.
+When the median raises a layer's memory, Maestro writes it to the layer's
+minimum memory at the end of the tick, so CueGUI shows the size frames book
+at and the size survives a Cuebot restart. The write only ever raises the
+value. The next tick reads it back as the layer's ask, so each increase is
+written once. The core grant is not written back: a 1-core ask has to stay
+"let the system decide".
 
 Verified by the `STRANDGROW` scenario: an 18G 1-core flood must show a probe
 of ~8 ask-sized frames, later launches at the derived share (500 points on
@@ -818,14 +862,22 @@ steady path, the breaker fallback across an outage, and the ambiguity races.
   never started is resolved before anything is released (`launchOne`): the
   frame may be running on the host, so two not-running polls are required,
   and the booking is kept otherwise (with `dispatcher.launch_confirm_budget_ms`
-  at zero the legacy release-first rollback applies instead). A definite
-  failure unbooks the proc, clears the frame on the version the batch start
-  kept in step, and kills on the host only when the clear matched: a clear
-  that matched no row means the frame moved on, and a kill addressed by host
-  and frame would hit the new run. A launch that waited more than half the
-  orphan age in the pool's queue (`ProcDao.ORPHAN_AGE_SECONDS`, 300 s, so
-  150 s) is rolled back unsent and without a kill: at the orphan age the
-  maintenance pass releases the proc and the next tick rebooks the frame.
+  at zero the legacy release-first rollback applies instead). The polls run
+  on the dispatcher's launch confirmation pool
+  (`dispatcher.launch_confirm_pool_size`), not on the launch thread, which
+  moves on to the next booking while this one stays booked until resolved.
+  A definite failure unbooks the proc, clears the frame on the version the
+  batch start kept in step, and kills on the host only when the clear
+  matched: a clear that matched no row means the frame moved on, and a kill
+  addressed by host and frame would hit the new run. A launch that waited
+  more than half the orphan age in the pool's queue
+  (`ProcDao.ORPHAN_AGE_SECONDS`, 300 s, so 150 s) is rolled back unsent and
+  without a kill: at the orphan age the maintenance pass releases the proc
+  and the next tick rebooks the frame. A host whose launch breaker is open
+  (`grpc.rqd_launch_breaker_failures` consecutive launches with unknown
+  outcome, skipped for `grpc.rqd_launch_breaker_cooldown_s`) is left out of
+  the plan reads, and a booking whose host's breaker opened after the plan
+  is rolled back unsent the same way.
 - **Leader loss mid-commit**: the chunk loop checks the lock connection before
   each chunk and demotes when it is gone; the frames left stay WAITING for the
   next leader, which plans from the database. The lost leader's reservations,
