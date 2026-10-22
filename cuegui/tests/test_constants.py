@@ -26,6 +26,8 @@ import os
 import mock
 import pyfakefs.fake_filesystem_unittest
 
+import opencue.exception
+import opencue_proto.cue_pb2
 import cuegui.Constants
 
 
@@ -46,6 +48,11 @@ class ConstantsTests(pyfakefs.fake_filesystem_unittest.TestCase):
             os.path.join(os.path.dirname(cuegui.__file__), 'config', 'cuegui.yaml'), read_only=True)
         if 'CUEGUI_CONFIG_FILE' in os.environ:
             del os.environ['CUEGUI_CONFIG_FILE']
+        getSystemStatsPatcher = mock.patch(
+            'opencue.api.getSystemStats',
+            return_value=opencue_proto.cue_pb2.SystemStats())
+        self.getSystemStatsMock = getSystemStatsPatcher.start()
+        self.addCleanup(getSystemStatsPatcher.stop)
 
     def test__should_load_user_config_from_env_var(self):
         config_file_path = '/path/to/config.yaml'
@@ -78,3 +85,33 @@ class ConstantsTests(pyfakefs.fake_filesystem_unittest.TestCase):
         result = importlib.reload(cuegui.Constants)
 
         self.assertEqual('open -t', result.DEFAULT_EDITOR)
+
+    def test__should_load_finished_jobs_readonly_from_cuebot(self):
+        self.getSystemStatsMock.return_value = opencue_proto.cue_pb2.SystemStats(
+            frame_finished_jobs_readonly=True, layer_finished_jobs_readonly=False)
+
+        import cuegui.Constants
+        result = importlib.reload(cuegui.Constants)
+
+        self.getSystemStatsMock.assert_called()
+        self.assertTrue(result.FINISHED_JOBS_READONLY_FRAME)
+        self.assertFalse(result.FINISHED_JOBS_READONLY_LAYER)
+
+        self.getSystemStatsMock.reset_mock()
+        self.getSystemStatsMock.return_value = opencue_proto.cue_pb2.SystemStats(
+            frame_finished_jobs_readonly=False, layer_finished_jobs_readonly=True)
+
+        result = importlib.reload(cuegui.Constants)
+
+        self.assertFalse(result.FINISHED_JOBS_READONLY_FRAME)
+        self.assertTrue(result.FINISHED_JOBS_READONLY_LAYER)
+
+    def test__finished_jobs_readonly_should_default_to_true_when_cuebot_unreachable(self):
+        self.getSystemStatsMock.side_effect = opencue.exception.ConnectionException(
+            'no cuebot')
+
+        import cuegui.Constants
+        result = importlib.reload(cuegui.Constants)
+
+        self.assertTrue(result.FINISHED_JOBS_READONLY_FRAME)
+        self.assertTrue(result.FINISHED_JOBS_READONLY_LAYER)

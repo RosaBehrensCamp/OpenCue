@@ -567,6 +567,19 @@ class SystemTests(unittest.TestCase):
         stubMock.GetSystemStats.assert_called_with(
             cue_pb2.CueGetSystemStatsRequest(), timeout=mock.ANY)
 
+    @mock.patch('opencue.cuebot.Cuebot.getStub')
+    def testGetSystemStatsFinishedJobsReadonly(self, getStubMock):
+        stubMock = mock.Mock()
+        stubMock.GetSystemStats.return_value = cue_pb2.CueGetSystemStatsResponse(
+            stats=cue_pb2.SystemStats(
+                layer_finished_jobs_readonly=True, frame_finished_jobs_readonly=False))
+        getStubMock.return_value = stubMock
+
+        stats = opencue.api.getSystemStats()
+
+        self.assertTrue(stats.layer_finished_jobs_readonly)
+        self.assertFalse(stats.frame_finished_jobs_readonly)
+
 class FacilityTests(unittest.TestCase):
 
     @mock.patch('opencue.cuebot.Cuebot.getStub')
