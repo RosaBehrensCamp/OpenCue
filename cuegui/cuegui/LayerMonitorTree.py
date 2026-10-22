@@ -30,6 +30,8 @@ from qtpy import QtWidgets
 
 import grpc
 
+import opencue.api
+from opencue.exception import CueException
 from opencue.exception import EntityNotFoundException
 from opencue.api import job_pb2
 
@@ -299,7 +301,7 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
     def contextMenuEvent(self, e):
         """When right clicking on an item, this raises a context menu"""
         readonly = (cuegui.Constants.FINISHED_JOBS_READONLY_LAYER and
-                    self.__job and self.__job.state() == job_pb2.FINISHED)
+                    self.__job and self.__refreshJobState() == job_pb2.FINISHED)
 
         __selectedObjects = self.selectedObjects()
 
@@ -353,6 +355,18 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
             self.__menuActions.layers().addAction(menu, "retryDead").setEnabled(not readonly)
 
         menu.exec_(e.globalPos())
+
+    def __refreshJobState(self):
+        """Fetches the current job state from the cuebot and stores it on the cached job.
+        The cached job is only read when the job is loaded, so its state goes stale if the
+        job finishes while it is displayed. Falls back to the cached state on error.
+        @rtype:  job_pb2.JobState
+        @return: The current job state"""
+        try:
+            self.__job.data.state = opencue.api.getJob(self.__job.id()).state()
+        except (CueException, grpc.RpcError) as e:
+            logger.warning("Failed to refresh the state of job %s: %s", self.__job.name(), e)
+        return self.__job.state()
 
     def __itemDoubleClickedFilterLayer(self):
         """Filter FrameMonitor to double-clicked Layers.
