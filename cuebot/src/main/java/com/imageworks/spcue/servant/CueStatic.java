@@ -16,6 +16,8 @@
 package com.imageworks.spcue.servant;
 
 import io.grpc.stub.StreamObserver;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 
 import com.imageworks.spcue.dispatcher.BookingQueue;
 import com.imageworks.spcue.dispatcher.DispatchQueue;
@@ -35,6 +37,9 @@ public class CueStatic extends CueInterfaceGrpc.CueInterfaceImplBase {
     private HostReportQueue reportQueue;
     private BookingQueue bookingQueue;
     private DispatchSupport dispatchSupport;
+
+    @Autowired
+    private Environment env;
 
     @Override
     public void getSystemStats(CueGetSystemStatsRequest request,
@@ -81,7 +86,13 @@ public class CueStatic extends CueInterfaceGrpc.CueInterfaceImplBase {
 
                 .setUnbookedProcs(DispatchSupport.unbookedProcs.get())
                 .setPickedUpCores(DispatchSupport.pickedUpCoresCount.get())
-                .setStrandedCores(DispatchSupport.strandedCoresCount.get()).build();
+                .setStrandedCores(DispatchSupport.strandedCoresCount.get())
+
+                .setLayerFinishedJobsReadonly(
+                        env.getProperty("layer.finished_jobs_readonly", Boolean.class, false))
+                .setFrameFinishedJobsReadonly(
+                        env.getProperty("frame.finished_jobs_readonly", Boolean.class, false))
+                .build();
         responseObserver.onNext(CueGetSystemStatsResponse.newBuilder().setStats(stats).build());
         responseObserver.onCompleted();
     }

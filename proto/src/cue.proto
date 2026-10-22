@@ -58,6 +58,10 @@ message SystemStats {
     int64 picked_up_cores = 34;
     int64 stranded_cores = 35;
     int64 deferred_release_procs = 36;
+    // Values of layer.finished_jobs_readonly and frame.finished_jobs_readonly in
+    // opencue.properties. When true, layers/frames of finished jobs cannot be modified.
+    bool layer_finished_jobs_readonly = 37;
+    bool frame_finished_jobs_readonly = 38;
 }
 
 

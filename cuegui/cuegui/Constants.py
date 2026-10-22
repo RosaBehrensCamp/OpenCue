@@ -223,8 +223,20 @@ for viewer in __config.get('output_viewers', {}):
 
 OUTPUT_VIEWER_DIRECT_CMD_CALL = __config.get('output_viewer_direct_cmd_call')
 
-FINISHED_JOBS_READONLY_FRAME = __config.get('finished_jobs_readonly.frame', False)
-FINISHED_JOBS_READONLY_LAYER = __config.get('finished_jobs_readonly.layer', False)
+def __getFinishedJobsReadonly():
+    """Reads the frame/layer finished_jobs_readonly flags from cuebot's opencue.properties.
+    Falls back to True (preserves original cuegui.yaml default values) for both if cuebot 
+    can't be reached."""
+    try:
+        stats = opencue.api.getSystemStats()
+        return stats.frame_finished_jobs_readonly, stats.layer_finished_jobs_readonly
+    # pylint: disable=broad-except
+    except Exception as e:
+        __getLogger().warning(
+            'Could not read finished_jobs_readonly settings from cuebot: %s', e)
+        return True, True
+
+FINISHED_JOBS_READONLY_FRAME, FINISHED_JOBS_READONLY_LAYER = __getFinishedJobsReadonly()
 
 DISABLED_ACTION_TYPES = [action_type.strip()
                          for action_type
