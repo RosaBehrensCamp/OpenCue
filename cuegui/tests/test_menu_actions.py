@@ -847,6 +847,45 @@ class LayerActionsTests(unittest.TestCase):
         self.job.retryFrames.assert_called_with(
             layer=[layer_name], state=[opencue.api.job_pb2.DEAD])
 
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
+    @mock.patch('cuegui.Utils.isPermissible', return_value=True)
+    def test_retryUnsuccessful(self, isPermissibleMock, yesNoMock):
+        layer_names = ['arbitrary-name1', 'arbitrary-name2']
+        layers = [
+            opencue.wrappers.layer.Layer(opencue_proto.job_pb2.Layer(name=layer_name))
+            for layer_name in layer_names]
+        for layer in layers:
+            layer.parent = lambda : self.job
+
+        self.layer_actions.retryUnsuccessful(rpcObjects=layers)
+
+        self.job.retryFrames.assert_called_with(
+            layer=layer_names,
+            state=[opencue.api.job_pb2.DEAD, opencue.api.job_pb2.EATEN])
+
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=False)
+    @mock.patch('cuegui.Utils.isPermissible', return_value=True)
+    def test_retryUnsuccessfulCanceled(self, isPermissibleMock, yesNoMock):
+        layer = opencue.wrappers.layer.Layer(
+            opencue_proto.job_pb2.Layer(name='arbitrary-name'))
+        layer.parent = lambda : self.job
+
+        self.layer_actions.retryUnsuccessful(rpcObjects=[layer])
+
+        self.job.retryFrames.assert_not_called()
+
+    @mock.patch('cuegui.Utils.showErrorMessageBox')
+    @mock.patch('cuegui.Utils.isPermissible', return_value=False)
+    def test_retryUnsuccessfulNotPermitted(self, isPermissibleMock, errorBoxMock):
+        layer = opencue.wrappers.layer.Layer(
+            opencue_proto.job_pb2.Layer(name='arbitrary-name'))
+        layer.parent = lambda : self.job
+
+        self.layer_actions.retryUnsuccessful(rpcObjects=[layer])
+
+        errorBoxMock.assert_called_once()
+        self.job.retryFrames.assert_not_called()
+
     @mock.patch.object(opencue.wrappers.layer.Layer, 'markdone', autospec=True)
     @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
     def test_markdone(self, yesNoMock, markdoneMock):

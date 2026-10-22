@@ -1167,6 +1167,27 @@ class LayerActions(AbstractActions):
                                                     state=[opencue.api.job_pb2.DEAD])
                     self._update()
 
+    retryUnsuccessful_info = ["Retry unsuccessful frames", None, "retry"]
+
+    def retryUnsuccessful(self, rpcObjects=None):
+        layers = self._getOnlyLayerObjects(rpcObjects)
+        if layers:
+            if not cuegui.Utils.isPermissible(self._getSource()):
+                cuegui.Utils.showErrorMessageBox(
+                    AbstractActions.USER_INTERACTION_PERMISSIONS.format(
+                        "retry unsuccessful frames in layers",
+                        self._getSource().username())
+                )
+            else:
+                if cuegui.Utils.questionBoxYesNo(self._caller, "Confirm",
+                                                 "Retry all DEAD and EATEN frames in selected "
+                                                 "layers?",
+                                                 [layer.data.name for layer in layers]):
+                    layers[-1].parent().retryFrames(layer=[layer.data.name for layer in layers],
+                                                    state=[opencue.api.job_pb2.DEAD,
+                                                           opencue.api.job_pb2.EATEN])
+                    self._update()
+
     markdone_info = ["Mark done", None, "markdone"]
 
     def markdone(self, rpcObjects=None):
