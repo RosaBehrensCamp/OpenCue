@@ -117,6 +117,50 @@ class FrameMonitorTreeTests(unittest.TestCase):
         getFramesMock.assert_called_with(self.job)
         getUpdatedFramesMock.assert_not_called()
 
+    def __finishJob(self, getFramesMock, getUpdatedFramesMock):
+        """Loads the job, then runs an update that reports the job as finished."""
+        getFramesMock.return_value = []
+        getUpdatedFramesMock.return_value = opencue_proto.job_pb2.JobGetUpdatedFramesResponse(
+            state=opencue_proto.job_pb2.FINISHED, server_time=1000)
+        self.frameMonitorTree.tick()
+        self.frameMonitorTree.updateChangedRequest()
+        self.frameMonitorTree.tick()
+        getUpdatedFramesMock.reset_mock()
+
+    @mock.patch.object(cuegui.Constants, 'FINISHED_JOBS_READONLY_LAYER', new=True)
+    @mock.patch.object(cuegui.Constants, 'FINISHED_JOBS_READONLY_FRAME', new=False)
+    @mock.patch.object(opencue.wrappers.job.Job, 'getUpdatedFrames', autospec=True)
+    @mock.patch.object(opencue.wrappers.job.Job, 'getFrames')
+    def test_tickUpdateChangedAfterJobFinished(self, getFramesMock, getUpdatedFramesMock):
+        self.__finishJob(getFramesMock, getUpdatedFramesMock)
+
+        # Frames retried elsewhere move the job back to pending.
+        getUpdatedFramesMock.return_value = opencue_proto.job_pb2.JobGetUpdatedFramesResponse(
+            state=opencue_proto.job_pb2.PENDING,
+            server_time=2000,
+            updated_frames=opencue_proto.job_pb2.UpdatedFrameSeq(
+                updated_frames=[opencue_proto.job_pb2.UpdatedFrame(id='foo')]))
+        self.frameMonitorTree.updateChangedRequest()
+        self.frameMonitorTree.tick()
+
+        getUpdatedFramesMock.assert_called_with(self.job, mock.ANY)
+        self.assertEqual(
+            opencue_proto.job_pb2.PENDING,
+            self.frameMonitorTree._FrameMonitorTree__jobState)  # pylint: disable=protected-access
+
+    @mock.patch.object(cuegui.Constants, 'FINISHED_JOBS_READONLY_LAYER', new=True)
+    @mock.patch.object(cuegui.Constants, 'FINISHED_JOBS_READONLY_FRAME', new=True)
+    @mock.patch.object(opencue.wrappers.job.Job, 'getUpdatedFrames')
+    @mock.patch.object(opencue.wrappers.job.Job, 'getFrames')
+    def test_tickNoUpdateChangedAfterReadonlyJobFinished(
+            self, getFramesMock, getUpdatedFramesMock):
+        self.__finishJob(getFramesMock, getUpdatedFramesMock)
+
+        self.frameMonitorTree.updateChangedRequest()
+        self.frameMonitorTree.tick()
+
+        getUpdatedFramesMock.assert_not_called()
+
     def test_getCores(self):
         frame = opencue.wrappers.frame.Frame(
             opencue_proto.job_pb2.Frame(last_resource='foo/125.82723/0'))

@@ -545,9 +545,14 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         @rtype:  None or List<Frame>
         @return: The results from the cuebot"""
         logger.info("_getUpdateChanged")
+        # Unless finished jobs are readonly for both frames and layers, a finished job's frames
+        # can still be retried from anywhere (other monitors, cueadmin, other users), which moves
+        # the job back to PENDING. Keep polling those so __jobState and the frames stay current.
+        finishedJobsReadonly = (cuegui.Constants.FINISHED_JOBS_READONLY_FRAME and
+                                cuegui.Constants.FINISHED_JOBS_READONLY_LAYER)
         if not self.__job or \
-           (self.__jobState and self.__jobState == opencue.api.job_pb2.FINISHED):
-            logger.debug("no job or job is finished, bailing")
+           (finishedJobsReadonly and self.__jobState == opencue.api.job_pb2.FINISHED):
+            logger.debug("no job or job is finished and readonly, bailing")
             return []
         logger.info(" + Nth update = %s", self.__class__)
         updatedFrames = []
