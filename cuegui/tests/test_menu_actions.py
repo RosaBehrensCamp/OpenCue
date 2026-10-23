@@ -437,6 +437,15 @@ class JobActionsTests(unittest.TestCase):
         job.retryFrames.assert_not_called()
         errorBoxMock.assert_called_once()
 
+    def test_retryUnsuccessfulTooltip(self):
+        caller = qtpy.QtWidgets.QWidget()
+        job_actions = cuegui.MenuActions.JobActions(caller, mock.Mock(), None, None)
+
+        action = job_actions.addAction(qtpy.QtWidgets.QMenu(caller), 'retryUnsuccessful')
+
+        self.assertEqual(
+            'Retry both dead and eaten frames in the selected jobs', action.toolTip())
+
     @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
     def test_dropExternalDependencies(self, yesNoMock):
         job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(name='job-name'))
@@ -918,6 +927,15 @@ class LayerActionsTests(unittest.TestCase):
 
         errorBoxMock.assert_called_once()
         self.job.retryFrames.assert_not_called()
+
+    def test_retryUnsuccessfulTooltip(self):
+        caller = qtpy.QtWidgets.QWidget()
+        layer_actions = cuegui.MenuActions.LayerActions(caller, mock.Mock(), None, None)
+
+        action = layer_actions.addAction(qtpy.QtWidgets.QMenu(caller), 'retryUnsuccessful')
+
+        self.assertEqual(
+            'Retry both dead and eaten frames in the selected layers', action.toolTip())
 
     @mock.patch.object(opencue.wrappers.layer.Layer, 'markdone', autospec=True)
     @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)

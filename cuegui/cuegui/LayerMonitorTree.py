@@ -306,6 +306,7 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         __selectedObjects = self.selectedObjects()
 
         menu = QtWidgets.QMenu()
+        menu.setToolTipsVisible(True)
 
         self.__menuActions.layers().addAction(menu, "view")
         self.__menuActions.layers().addAction(menu, "copyLayerName")

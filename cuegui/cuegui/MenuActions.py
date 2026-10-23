@@ -178,6 +178,8 @@ class AbstractActions(object):
                     self.__iconCache[icon_key] = QtGui.QIcon(":%s.png" % info[ICON])
 
             action = QtWidgets.QAction(self.__iconCache[icon_key], info[TITLE], self._caller)
+            if info[TOOLTIP]:
+                action.setToolTip(info[TOOLTIP])
 
             if not callback:
                 callback = actionName
@@ -696,7 +698,9 @@ class JobActions(AbstractActions):
                             "retry dead for some of the selected jobs",
                             ", ".join(blocked_job_owners)))
 
-    retryUnsuccessful_info = ["Retry unsuccessful frames", None, "retry"]
+    retryUnsuccessful_info = ["Retry unsuccessful frames",
+                              "Retry both dead and eaten frames in the selected jobs",
+                              "retry"]
 
     def retryUnsuccessful(self, rpcObjects=None):
         jobs = self._getOnlyJobObjects(rpcObjects)
@@ -1193,7 +1197,9 @@ class LayerActions(AbstractActions):
                                                     state=[opencue.api.job_pb2.DEAD])
                     self._update()
 
-    retryUnsuccessful_info = ["Retry unsuccessful frames", None, "retry"]
+    retryUnsuccessful_info = ["Retry unsuccessful frames",
+                              "Retry both dead and eaten frames in the selected layers",
+                              "retry"]
 
     def retryUnsuccessful(self, rpcObjects=None):
         layers = self._getOnlyLayerObjects(rpcObjects)

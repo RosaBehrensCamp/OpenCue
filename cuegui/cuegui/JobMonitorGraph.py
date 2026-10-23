@@ -62,6 +62,7 @@ class JobMonitorGraph(AbstractGraphWidget):
         )
 
         menu = self.graph.context_menu().qmenu
+        menu.setToolTipsVisible(True)
 
         dependMenu = QtWidgets.QMenu("&Dependencies", self)
         self.__menuActions.layers().addAction(dependMenu, "viewDepends")
