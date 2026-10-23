@@ -405,6 +405,39 @@ class JobActionsTests(unittest.TestCase):
         job.retryFrames.assert_not_called()
 
     @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
+    @mock.patch('cuegui.Utils.isPermissible', return_value=True)
+    def test_retryUnsuccessful(self, isPermissibleMock, yesNoMock):
+        job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(name='job-name'))
+        job.retryFrames = mock.Mock()
+
+        self.job_actions.retryUnsuccessful(rpcObjects=[job])
+
+        job.retryFrames.assert_called_with(
+            state=[opencue_proto.job_pb2.DEAD, opencue_proto.job_pb2.EATEN])
+
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=False)
+    @mock.patch('cuegui.Utils.isPermissible', return_value=True)
+    def test_retryUnsuccessfulCanceled(self, isPermissibleMock, yesNoMock):
+        job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(name='job-name'))
+        job.retryFrames = mock.Mock()
+
+        self.job_actions.retryUnsuccessful(rpcObjects=[job])
+
+        job.retryFrames.assert_not_called()
+
+    @mock.patch('cuegui.Utils.showErrorMessageBox')
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
+    @mock.patch('cuegui.Utils.isPermissible', return_value=False)
+    def test_retryUnsuccessfulNotPermitted(self, isPermissibleMock, yesNoMock, errorBoxMock):
+        job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(name='job-name'))
+        job.retryFrames = mock.Mock()
+
+        self.job_actions.retryUnsuccessful(rpcObjects=[job])
+
+        job.retryFrames.assert_not_called()
+        errorBoxMock.assert_called_once()
+
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
     def test_dropExternalDependencies(self, yesNoMock):
         job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(name='job-name'))
         job.dropDepends = mock.Mock()

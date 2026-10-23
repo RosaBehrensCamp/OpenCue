@@ -352,11 +352,12 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         self.__menuActions.layers().addAction(menu, "retry").setEnabled(not readonly)
         if [layer for layer in __selectedObjects
                 if layer.data.layer_stats.dead_frames or layer.data.layer_stats.eaten_frames]:
+            menu.addSeparator()
             self.__menuActions.layers().addAction(menu, "retryUnsuccessful").setEnabled(
                 not readonly)
-        if [layer for layer in __selectedObjects if layer.data.layer_stats.dead_frames]:
-            menu.addSeparator()
-            self.__menuActions.layers().addAction(menu, "retryDead").setEnabled(not readonly)
+            if [layer for layer in __selectedObjects if layer.data.layer_stats.dead_frames]:
+                self.__menuActions.layers().addAction(menu, "retryDead").setEnabled(
+                    not readonly)
 
         menu.exec_(e.globalPos())
 

@@ -696,6 +696,32 @@ class JobActions(AbstractActions):
                             "retry dead for some of the selected jobs",
                             ", ".join(blocked_job_owners)))
 
+    retryUnsuccessful_info = ["Retry unsuccessful frames", None, "retry"]
+
+    def retryUnsuccessful(self, rpcObjects=None):
+        jobs = self._getOnlyJobObjects(rpcObjects)
+        if jobs:
+            # check permissions
+            if cuegui.Utils.questionBoxYesNo(self._caller, "Confirm",
+                                             "Retry all DEAD and EATEN frames in selected jobs?",
+                                             [job.data.name for job in jobs]):
+                blocked_job_owners = []
+                authorized_jobs = []
+                for job in jobs:
+                    if not cuegui.Utils.isPermissible(job):
+                        blocked_job_owners.append(job.username())
+                    else:
+                        authorized_jobs.append(job)
+                self._runAction("Retry unsuccessful frames", authorized_jobs,
+                                lambda job: job.retryFrames(
+                                    state=[opencue_proto.job_pb2.DEAD,
+                                           opencue_proto.job_pb2.EATEN]))
+                if blocked_job_owners:
+                    cuegui.Utils.showErrorMessageBox(
+                        AbstractActions.USER_INTERACTION_PERMISSIONS.format(
+                            "retry unsuccessful frames for some of the selected jobs",
+                            ", ".join(blocked_job_owners)))
+
     dropExternalDependencies_info = ["Drop External Dependencies", None, "kill"]
 
     def dropExternalDependencies(self, rpcObjects=None):

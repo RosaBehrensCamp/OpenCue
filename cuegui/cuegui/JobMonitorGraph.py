@@ -78,8 +78,8 @@ class JobMonitorGraph(AbstractGraphWidget):
         self.__menuActions.layers().addAction(menu, "kill")
         self.__menuActions.layers().addAction(menu, "eat")
         self.__menuActions.layers().addAction(menu, "retry")
-        self.__menuActions.layers().addAction(menu, "retryUnsuccessful")
         menu.addSeparator()
+        self.__menuActions.layers().addAction(menu, "retryUnsuccessful")
         self.__menuActions.layers().addAction(menu, "retryDead")
 
     def setJob(self, job):

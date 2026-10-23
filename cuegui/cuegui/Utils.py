@@ -83,7 +83,7 @@ def countObjectTypes(objects):
 
 def countJobTypes(objects):
     """Given a list of jobs, returns a count of how many jobs have each status."""
-    results = {"paused": False, "unpaused": False, "hasDead": False,
+    results = {"paused": False, "unpaused": False, "hasDead": False, "hasUnsuccessful": False,
                "autoEating": False, "notEating": False, "completed": False}
 
     for obj in objects:
@@ -96,6 +96,8 @@ def countJobTypes(objects):
                 results["unpaused"] = True
             if obj.data.job_stats.dead_frames:
                 results["hasDead"] = True
+            if obj.data.job_stats.dead_frames or obj.data.job_stats.eaten_frames:
+                results["hasUnsuccessful"] = True
             if obj.data.auto_eat:
                 results["autoEating"] = True
             else:

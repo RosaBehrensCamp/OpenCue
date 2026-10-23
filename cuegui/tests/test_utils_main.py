@@ -178,6 +178,18 @@ class UtilsViewerTests(unittest.TestCase):
         self.assertFalse(
             cuegui.Utils.countJobTypes([self._job(running_frames=1)])['completed'])
 
+    def test_shouldCountJobsWithUnsuccessfulFrames(self):
+        self.assertTrue(
+            cuegui.Utils.countJobTypes([self._job(dead_frames=1)])['hasUnsuccessful'])
+        self.assertTrue(
+            cuegui.Utils.countJobTypes([self._job(eaten_frames=1)])['hasUnsuccessful'])
+        self.assertTrue(
+            cuegui.Utils.countJobTypes([self._job(succeeded_frames=10),
+                                        self._job(eaten_frames=1)])['hasUnsuccessful'])
+        self.assertFalse(
+            cuegui.Utils.countJobTypes([self._job(succeeded_frames=9, running_frames=1)])
+            ['hasUnsuccessful'])
+
 
 if __name__ == '__main__':
     unittest.main()
