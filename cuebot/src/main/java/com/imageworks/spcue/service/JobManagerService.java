@@ -88,6 +88,11 @@ public class JobManagerService implements JobManager {
     }
 
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public boolean isJobFailing(JobInterface job) {
+        return jobDao.isJobFailing(job);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public boolean isLayerComplete(LayerInterface layer) {
         return layerDao.isLayerComplete(layer);
     }

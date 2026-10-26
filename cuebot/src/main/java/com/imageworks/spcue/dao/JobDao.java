@@ -118,6 +118,16 @@ public interface JobDao {
     boolean isJobComplete(JobInterface job);
 
     /**
+     * Returns true if the job is failing: nothing is waiting, running or checkpointing and at least
+     * one frame is dead, so the job cannot proceed without intervention. Frames in the depend state
+     * are not counted, since they may be blocked by the dead frames.
+     *
+     * @param job
+     * @return
+     */
+    boolean isJobFailing(JobInterface job);
+
+    /**
      * Inserts a JobDetail. The job will not be pending until its activated.
      *
      * @param j

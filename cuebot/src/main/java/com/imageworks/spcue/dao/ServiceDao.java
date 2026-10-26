@@ -15,6 +15,7 @@
 
 package com.imageworks.spcue.dao;
 
+import com.imageworks.spcue.JobInterface;
 import com.imageworks.spcue.ServiceEntity;
 import com.imageworks.spcue.ServiceOverrideEntity;
 
@@ -39,4 +40,13 @@ public interface ServiceDao {
     ServiceOverrideEntity getOverride(String id, String show);
 
     boolean isOverridden(String service, String show);
+
+    /**
+     * Returns true if any layer of the job uses a service with email on failing enabled. A show's
+     * service override takes precedence over the facility service.
+     *
+     * @param job
+     * @return
+     */
+    boolean isEmailOnFailing(JobInterface job);
 }

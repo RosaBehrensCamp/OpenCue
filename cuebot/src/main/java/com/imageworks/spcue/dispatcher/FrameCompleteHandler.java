@@ -546,7 +546,8 @@ public class FrameCompleteHandler {
                 byLayer.putIfAbsent(c.frame.getLayerId(), c);
             }
         }
-        if (succeeded || c.newFrameState.equals(FrameState.EATEN)) {
+        if (succeeded || c.newFrameState.equals(FrameState.EATEN)
+                || c.newFrameState.equals(FrameState.DEAD)) {
             byJob.putIfAbsent(c.frame.getJobId(), c);
         }
         if (succeeded) {
@@ -609,11 +610,26 @@ public class FrameCompleteHandler {
         }
     }
 
-    /** Phase three of batchPostOps for one job: the completion check. */
+    /** Phase three of batchPostOps for one job: the completion check, else the failing check. */
     private void fileJob(QueuedFrameCompletion c) {
         if (jobManager.isJobComplete(c.job)) {
             c.job.state = JobState.FINISHED;
             jobManagerSupport.queueShutdownJob(c.job, new Source("natural"), false);
+        } else {
+            notifyIfJobFailing(c.job);
+        }
+    }
+
+    /**
+     * Queues the failing job email when the job has just become failing (nothing left waiting or
+     * running, some frames dead) and one of its layers uses a service with email on failing
+     * enabled. Only called after a frame reached a final state, so a job that stays failing does
+     * not send again until it is retried and fails anew.
+     */
+    private void notifyIfJobFailing(DispatchJob job) {
+        if (jobManager.isJobFailing(job) && serviceDao.isEmailOnFailing(job)) {
+            logger.info("job " + job.getName() + " is failing, queueing failing job email");
+            jobManagerSupport.queueFailingJobEmail(job);
         }
     }
 
@@ -1504,7 +1520,11 @@ public class FrameCompleteHandler {
             if (jobManager.isJobComplete(job)) {
                 job.state = JobState.FINISHED;
                 jobManagerSupport.queueShutdownJob(job, new Source("natural"), false);
+            } else {
+                guard(() -> notifyIfJobFailing(job), "failing check of job " + job.getName());
             }
+        } else if (newFrameState.equals(FrameState.DEAD)) {
+            guard(() -> notifyIfJobFailing(job), "failing check of job " + job.getName());
         }
 
         return isLayerComplete;

@@ -81,6 +81,13 @@ public interface JobManager {
     boolean isJobComplete(JobInterface job);
 
     /**
+     * Returns true if the job is failing: nothing left waiting or running, and some frames dead.
+     *
+     * @return
+     */
+    boolean isJobFailing(JobInterface job);
+
+    /**
      * Returns true if the layer is complete.
      *
      * @param layer

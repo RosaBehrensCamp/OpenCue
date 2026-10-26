@@ -66,4 +66,10 @@ public class ServiceEntity extends Entity {
 
     public long minMemoryIncrease = Dispatcher.MINIMUM_MEMORY_INCREASE;
 
+    /**
+     * Email the job's owner when a job using this service is failing (nothing left waiting or
+     * running, and at least one dead frame).
+     */
+    public boolean emailOnFailing = false;
+
 }

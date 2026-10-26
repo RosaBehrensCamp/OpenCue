@@ -199,6 +199,31 @@ public class EmailSupport {
             return;
         }
 
+        FrameStateTotals jts = jobManager.getFrameStateTotals(job);
+        String status = jts.total != jts.succeeded ? "Failed " : "Succeeded ";
+        sendJobSummaryEmail(job, d, status, d.email.split(","));
+    }
+
+    /**
+     * Sends the job summary email for a job that is failing: nothing is left waiting or running and
+     * some frames are dead. Goes to the job's email addresses, or to the job's user when the job
+     * has none.
+     */
+    public void sendFailingEmail(JobInterface job) {
+
+        JobDetail d = jobManager.getJobDetail(job.getJobId());
+        String[] recipients;
+        if (d.email == null || d.email.trim().isEmpty()) {
+            recipients = new String[] {String.format("%s@%s", d.user, this.emailDomain)};
+        } else {
+            recipients = d.email.split(",");
+        }
+        sendJobSummaryEmail(job, d, "Failing ", recipients);
+    }
+
+    private void sendJobSummaryEmail(JobInterface job, JobDetail d, String status,
+            String[] recipients) {
+
         try {
 
             VelocityEngine ve = new VelocityEngine();
@@ -210,13 +235,6 @@ public class EmailSupport {
             VelocityContext context = new VelocityContext();
             ExecutionSummary exj = jobManager.getExecutionSummary(job);
             FrameStateTotals jts = jobManager.getFrameStateTotals(job);
-
-            String status = "";
-            if (jts.total != jts.succeeded) {
-                status = "Failed ";
-            } else {
-                status = "Succeeded ";
-            }
 
             context.put("jobName", d.name);
             context.put("jobStatus", status.toUpperCase());
@@ -310,14 +328,15 @@ public class EmailSupport {
                 }
             }
 
-            for (String email : d.email.split(",")) {
+            for (String email : recipients) {
                 try {
                     CueUtil.sendmail(email, this.emailFromAddress, subject,
                             new StringBuilder(w.toString()), imageMap, file);
                 } catch (Exception e) {
                     // just log and eat if the mail server is down or something
                     // of that nature.
-                    logger.info("Failed to send job complete mail, reason: " + e);
+                    logger.info("Failed to send job " + status.trim().toLowerCase(Locale.ROOT)
+                            + " mail, reason: " + e);
                 }
             }
         } catch (Exception e) {

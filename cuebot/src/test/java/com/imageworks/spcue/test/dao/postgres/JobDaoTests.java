@@ -159,6 +159,36 @@ public class JobDaoTests extends AbstractTransactionalJUnit4SpringContextTests {
     @Test
     @Transactional
     @Rollback(true)
+    public void testIsJobFailing() {
+        JobDetail job = launchJob();
+        // Frames are still waiting or depending.
+        assertFalse(jobDao.isJobFailing(job));
+
+        // Drop the frame depends so the frame state triggers let the states below stick.
+        jdbcTemplate.update("UPDATE frame SET int_depend_count=0 WHERE pk_job=?", job.getJobId());
+        jdbcTemplate.update("UPDATE frame SET str_state='SUCCEEDED' WHERE pk_job=?",
+                job.getJobId());
+        // Finished, nothing dead.
+        assertFalse(jobDao.isJobFailing(job));
+
+        String[] frames = jdbcTemplate.queryForList(
+                "SELECT pk_frame FROM frame WHERE pk_job=? ORDER BY int_dispatch_order",
+                String.class, job.getJobId()).toArray(new String[0]);
+        jdbcTemplate.update("UPDATE frame SET str_state='DEAD' WHERE pk_frame=?", frames[0]);
+        assertTrue(jobDao.isJobFailing(job));
+
+        // Depend frames may be blocked by the dead frame, so the job is still failing.
+        jdbcTemplate.update("UPDATE frame SET str_state='DEPEND' WHERE pk_frame=?", frames[1]);
+        assertTrue(jobDao.isJobFailing(job));
+
+        // A waiting frame means the job can still make progress.
+        jdbcTemplate.update("UPDATE frame SET str_state='WAITING' WHERE pk_frame=?", frames[2]);
+        assertFalse(jobDao.isJobFailing(job));
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
     public void testInsertJob() {
         JobDetail job = this.buildJobDetail();
         job.groupId = ROOT_FOLDER;

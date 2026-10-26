@@ -2145,10 +2145,13 @@ POST /service.ServiceInterface/GetService
     "timeoutLlu": 0,
     "minGpus": 0,
     "maxGpus": 0,
-    "minMemoryIncrease": 0
+    "minMemoryIncrease": 0,
+    "emailOnFailing": false
   }
 }
 ```
+
+When `emailOnFailing` is `true`, Cuebot emails the job's owner when a job using this service is failing: no frames are left waiting or running, and at least one frame is dead. The email goes to the job's email addresses, or to `<user>@<email.domain>` if the job has none. A show's service override takes precedence over the facility service.
 
 ### Get Default Services
 
@@ -2206,7 +2209,8 @@ POST /service.ServiceInterface/CreateService
     "minCores": 1,
     "maxCores": 16,
     "minMemory": 2147483648,
-    "tags": ["blender", "render"]
+    "tags": ["blender", "render"],
+    "emailOnFailing": true
   }
 }
 ```

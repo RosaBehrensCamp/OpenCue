@@ -205,6 +205,24 @@ public class JobDaoJdbc extends JdbcDaoSupport implements JobDao {
     }
 
     // spotless:off
+    private static final String IS_JOB_FAILING =
+            "SELECT "
+                + "COUNT(1) "
+            + "FROM job_stat "
+            + "WHERE pk_job=? "
+            + "AND int_waiting_count + int_running_count + int_checkpoint_count = 0 "
+            + "AND int_dead_count > 0";
+    // spotless:on
+
+    @Override
+    public boolean isJobFailing(JobInterface job) {
+        if (isLaunching(job)) {
+            return false;
+        }
+        return getJdbcTemplate().queryForObject(IS_JOB_FAILING, Integer.class, job.getJobId()) > 0;
+    }
+
+    // spotless:off
     public static final String GET_JOB =
             "SELECT "
                 + "job.pk_job, "

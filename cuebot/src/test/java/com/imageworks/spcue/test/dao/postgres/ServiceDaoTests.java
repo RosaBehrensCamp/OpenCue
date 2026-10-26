@@ -15,6 +15,7 @@
 
 package com.imageworks.spcue.test.dao.postgres;
 
+import java.io.File;
 import javax.annotation.Resource;
 
 import com.google.common.collect.Sets;
@@ -27,14 +28,19 @@ import org.springframework.test.context.junit4.AbstractTransactionalJUnit4Spring
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.imageworks.spcue.JobDetail;
 import com.imageworks.spcue.ServiceEntity;
 import com.imageworks.spcue.ServiceOverrideEntity;
 import com.imageworks.spcue.config.TestAppConfig;
 import com.imageworks.spcue.dao.ServiceDao;
+import com.imageworks.spcue.service.JobLauncher;
+import com.imageworks.spcue.service.JobSpec;
 import com.imageworks.spcue.test.AssumingPostgresEngine;
 import com.imageworks.spcue.util.CueUtil;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @Transactional
 @ContextConfiguration(classes = TestAppConfig.class, loader = AnnotationConfigContextLoader.class)
@@ -46,6 +52,9 @@ public class ServiceDaoTests extends AbstractTransactionalJUnit4SpringContextTes
 
     @Resource
     ServiceDao serviceDao;
+
+    @Resource
+    JobLauncher jobLauncher;
 
     @Test
     @Transactional
@@ -103,6 +112,7 @@ public class ServiceDaoTests extends AbstractTransactionalJUnit4SpringContextTes
         s.tags = Sets.newLinkedHashSet();
         s.tags.add("linux");
         s.minMemoryIncrease = CueUtil.GB4 + CueUtil.GB2;
+        s.emailOnFailing = true;
 
         serviceDao.update(s);
         ServiceEntity s1 = serviceDao.get(s.getId());
@@ -113,6 +123,7 @@ public class ServiceDaoTests extends AbstractTransactionalJUnit4SpringContextTes
         assertEquals(s.threadable, s1.threadable);
         assertEquals(s.tags.toArray()[0], s1.tags.toArray()[0]);
         assertEquals(s.minMemoryIncrease, s1.minMemoryIncrease);
+        assertTrue(s1.emailOnFailing);
     }
 
     @Test
@@ -189,6 +200,7 @@ public class ServiceDaoTests extends AbstractTransactionalJUnit4SpringContextTes
         s.tags = Sets.newLinkedHashSet();
         s.tags.add("linux");
         s.minMemoryIncrease = CueUtil.GB4;
+        s.emailOnFailing = true;
 
         serviceDao.update(s);
         ServiceEntity s1 = serviceDao.getOverride(s.getId());
@@ -203,6 +215,42 @@ public class ServiceDaoTests extends AbstractTransactionalJUnit4SpringContextTes
         assertEquals(s.tags.toArray()[0], s1.tags.toArray()[0]);
         assertEquals(s.minMemoryIncrease, s1.minMemoryIncrease);
         assertEquals(s1.minMemoryIncrease, CueUtil.GB4);
+        assertTrue(s1.emailOnFailing);
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
+    public void testIsEmailOnFailing() {
+        jobLauncher.testMode = true;
+        JobSpec spec = jobLauncher.parse(new File("src/test/resources/conf/jobspec/jobspec.xml"));
+        jobLauncher.launch(spec);
+        JobDetail job = spec.getJobs().get(0).detail;
+
+        // The job's layers use the shell service, which has the email off by default.
+        assertFalse(serviceDao.isEmailOnFailing(job));
+
+        ServiceEntity shell = serviceDao.get("shell");
+        shell.emailOnFailing = true;
+        serviceDao.update(shell);
+        assertTrue(serviceDao.isEmailOnFailing(job));
+
+        // A show override takes precedence over the facility service.
+        ServiceOverrideEntity override = new ServiceOverrideEntity();
+        override.name = "shell";
+        override.minCores = 100;
+        override.minMemory = CueUtil.GB4;
+        override.minGpuMemory = CueUtil.GB;
+        override.tags.add("general");
+        override.showId = job.getShowId();
+        override.minMemoryIncrease = CueUtil.GB2;
+        override.emailOnFailing = false;
+        serviceDao.insert(override);
+        assertFalse(serviceDao.isEmailOnFailing(job));
+
+        override.emailOnFailing = true;
+        serviceDao.update(override);
+        assertTrue(serviceDao.isEmailOnFailing(job));
     }
 
     @Test
