@@ -45,6 +45,9 @@ public class VirtualProc extends FrameEntity implements ProcInterface {
     public int gpusReserved;
     public long gpuMemoryReserved;
     public long gpuMemoryUsed;
+
+    // Concurrency slots reserved by this proc (slot-based scheduling). 0 for regular procs.
+    public int slotsReserved;
     public long gpuMemoryMax;
 
     public boolean unbooked;
@@ -69,6 +72,27 @@ public class VirtualProc extends FrameEntity implements ProcInterface {
 
     public String getName() {
         return hostName;
+    }
+
+    /**
+     * Build a proc for a slot-based frame: it reserves no cores, memory or gpus, only the frame's
+     * concurrency slots, and runs unpinned on the host.
+     */
+    public static final VirtualProc buildSlot(DispatchHost host, DispatchFrame frame) {
+        VirtualProc proc = new VirtualProc();
+        proc.allocationId = host.getAllocationId();
+        proc.hostId = host.getHostId();
+        proc.frameId = null;
+        proc.layerId = frame.getLayerId();
+        proc.jobId = frame.getJobId();
+        proc.showId = frame.getShowId();
+        proc.facilityId = frame.getFacilityId();
+        proc.os = frame.os;
+        proc.hostName = host.getName();
+        proc.unbooked = false;
+        proc.isLocalDispatch = false;
+        proc.slotsReserved = frame.slotsRequired;
+        return proc;
     }
 
     /**

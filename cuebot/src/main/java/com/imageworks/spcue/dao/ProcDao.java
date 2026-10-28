@@ -140,6 +140,17 @@ public interface ProcDao {
     java.util.Set<String> reserveHostResourcesBatch(java.util.List<VirtualProc> procs);
 
     /**
+     * Free slots on each of the given hosts that is a slot host: its concurrent slots limit less
+     * the slots its procs hold now. Hosts that are not slot hosts are absent from the result. Read
+     * after {@link #reserveHostResourcesBatch} has locked the host rows, so the count is current
+     * and stays so until the caller's transaction ends.
+     *
+     * @param hostIds the hosts to read
+     * @return host id to free slots, for slot hosts only
+     */
+    java.util.Map<String, Integer> getFreeSlots(java.util.Collection<String> hostIds);
+
+    /**
      * Return host idle resources reserved by {@link #reserveHostResourcesBatch} for procs that
      * ended up not being booked (e.g. their frame lost the version race). A pure re-increment, so
      * it can never drive idle negative.

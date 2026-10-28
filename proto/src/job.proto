@@ -126,6 +126,8 @@ service GroupInterface {
     // Set the group's Max Cores value
     rpc SetMaxCores(GroupSetMaxCoresRequest) returns (GroupSetMaxCoresResponse);
 
+    rpc SetMaxSlots(GroupSetMaxSlotsRequest) returns (GroupSetMaxSlotsResponse);
+
     // Set the groups Min Cores values
     rpc SetMinCores(GroupSetMinCoresRequest) returns (GroupSetMinCoresResponse);
 
@@ -263,6 +265,8 @@ service JobInterface {
 
     // Sets the maximum number of procs that can run on this job
     rpc SetMaxCores(JobSetMaxCoresRequest) returns (JobSetMaxCoresResponse);
+
+    rpc SetMaxSlots(JobSetMaxSlotsRequest) returns (JobSetMaxSlotsResponse);
 
     // Sets the default maximum number of frame retries for the job. One
     // a frame has retried this many times it will automatically go
@@ -613,6 +617,8 @@ message Group {
     float default_job_max_gpus = 13;
     float min_gpus = 14;
     float max_gpus = 15;
+    // Max concurrent slots for slot-based layers in this group (-1 unlimited, 0 reject-all).
+    int32 max_slots = 16;
 }
 
 message GroupSeq {
@@ -657,6 +663,8 @@ message Job {
     float max_gpus = 22;
     string loki_url = 23;
     int32 eligible_time = 24;
+    // Max concurrent slots for slot-based layers in this job (-1 unlimited, 0 reject-all).
+    int32 max_slots = 25;
 }
 
 // Use to filter the job search.  Please note that by searching for non-pending jobs, the output is limited to 200 jobs
@@ -744,6 +752,8 @@ message Layer {
     // Read-only. The per-frame memory (KB) the scheduler last booked this layer at, on
     // scheduler-managed shows; 0 = not sized yet.
     int64 booked_memory = 28;
+    // Concurrency slots each frame of this layer requires (0 = not slot-based).
+    int32 slots_required = 29;
 }
 
 message LayerSeq {
@@ -1126,6 +1136,14 @@ message GroupSetMaxCoresRequest {
 
 message GroupSetMaxCoresResponse {} // Empty
 
+// SetMaxSlots
+message GroupSetMaxSlotsRequest {
+    Group group = 1;
+    int32 max_slots = 2;
+}
+
+message GroupSetMaxSlotsResponse {} // Empty
+
 // SetMinCores
 message GroupSetMinCoresRequest {
     Group group = 1;
@@ -1478,6 +1496,14 @@ message JobSetMaxCoresRequest {
 }
 
 message JobSetMaxCoresResponse {} // Empty
+
+// SetMaxSlots
+message JobSetMaxSlotsRequest {
+    Job job = 1;
+    int32 val = 2;
+}
+
+message JobSetMaxSlotsResponse {} // Empty
 
 // SetMaxGpus
 message JobSetMaxGpusRequest {

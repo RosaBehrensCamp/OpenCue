@@ -416,7 +416,9 @@ class RqCore(object):
             log.warning(err)
             raise rqd.rqexceptions.InvalidUserException(err)
 
-        if runFrame.num_cores <= 0:
+        # Slot-based frames reserve 0 cores and run unpinned, capped by concurrency
+        # slots that Cuebot accounts for; every other frame needs at least one core.
+        if runFrame.num_cores < 0 or (runFrame.num_cores == 0 and runFrame.slots_required <= 0):
             err = "Not launching, numCores must be > 0"
             log.warning(err)
             raise rqd.rqexceptions.CoreReservationFailureException(err)

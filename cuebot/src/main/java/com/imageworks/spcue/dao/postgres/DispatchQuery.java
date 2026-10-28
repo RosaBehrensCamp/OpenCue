@@ -764,6 +764,9 @@ public class DispatchQuery {
                 + "AND "
                     + "frame.str_state='WAITING' "
                 + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
+                + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
                     + "job.pk_job=:jobId "
@@ -846,6 +849,9 @@ public class DispatchQuery {
                 + "AND "
                     + "frame.str_state='WAITING' "
                 + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
+                + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
                     + "job.pk_job=:jobId "
@@ -920,6 +926,9 @@ public class DispatchQuery {
                 + "AND "
                     + "frame.str_state='WAITING' "
                 + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
+                + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
                     + "job.pk_job=? "
@@ -985,6 +994,9 @@ public class DispatchQuery {
                     + "layer.int_gpu_mem_min <= ? "
                 + "AND "
                     + "frame.str_state='WAITING' "
+                + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
                 + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
@@ -1059,6 +1071,9 @@ public class DispatchQuery {
                     + "layer.int_gpu_mem_min <= :gpuMemoryAvailable "
                 + "AND "
                     + "frame.str_state='WAITING' "
+                + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
                 + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
@@ -1142,6 +1157,9 @@ public class DispatchQuery {
                 + "AND "
                     + "frame.str_state='WAITING' "
                 + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
+                + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
                     + "layer.pk_layer=:layerId "
@@ -1202,6 +1220,7 @@ public class DispatchQuery {
                 + "layer.str_range, "
                 + "layer.int_chunk_size, "
                 + "layer.str_services, "
+                + "layer.int_slots_required, "
                 + "frame.int_mem_retry "
             + "FROM "
                 + "frame "
@@ -1275,6 +1294,9 @@ public class DispatchQuery {
                 + "AND "
                     + "frame.str_state='WAITING' "
                 + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
+                + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "
                     + "layer.pk_layer = ? "
@@ -1340,6 +1362,9 @@ public class DispatchQuery {
                     + "layer.int_gpu_mem_min <= ? "
                 + "AND "
                     + "frame.str_state='WAITING' "
+                + "AND "
+                    // Slot layers book only through Maestro (slot hosts, slot caps).
+                    + "layer.int_slots_required = 0 "
                 + "AND "
                     + "(layer.ts_start_after IS NULL OR layer.ts_start_after <= current_timestamp) "
                 + "AND "

@@ -391,6 +391,14 @@ public class CoreUnitDispatcher implements Dispatcher {
         String[] selfishServices =
                 env.getProperty("dispatcher.frame.selfish.services", "").split(",");
         for (DispatchFrame frame : frames) {
+            // A slot frame reserves no cores, memory or gpus, only its slots. Maestro
+            // already fit the slots against the host's slot cap in placement, so there
+            // is nothing to fit here.
+            if (frame.slotsRequired > 0) {
+                bookings.add(new FrameBooking(frame, VirtualProc.buildSlot(host, frame)));
+                DispatchSupport.bookedProcs.getAndIncrement();
+                continue;
+            }
 
             // Maestro sized this layer (maestro.md 3.9): book the frames at that
             // size, up or down from the ask, so the plan and the commit describe

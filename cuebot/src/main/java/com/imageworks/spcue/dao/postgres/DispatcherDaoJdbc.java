@@ -550,6 +550,11 @@ public class DispatcherDaoJdbc extends JdbcDaoSupport implements DispatcherDao {
                         .addValue("layerId", layerId).addValue("frameLimit", limit),
                 (rs, rowNum) -> {
                     DispatchFrame frame = FrameDaoJdbc.DISPATCH_FRAME_MAPPER.mapRow(rs, rowNum);
+                    frame.slotsRequired = rs.getInt("int_slots_required");
+                    if (frame.slotsRequired > 0) {
+                        // A slot frame runs unpinned on 0 cores: never threadable.
+                        frame.threadable = false;
+                    }
                     frame.memRetryKb = rs.getLong("int_mem_retry");
                     return frame;
                 });

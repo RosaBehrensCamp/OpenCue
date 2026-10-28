@@ -233,4 +233,14 @@ public class SubscriptionDaoJdbc extends JdbcDaoSupport implements SubscriptionD
         getJdbcTemplate().update("UPDATE subscription SET int_burst=? WHERE pk_subscription=?",
                 size, sub.getSubscriptionId());
     }
+
+    @Override
+    public void updateSubscriptionMaxSlots(SubscriptionInterface sub, int maxSlots) {
+        // Slots are whole counts: -1 unlimited, 0 reject-all, N cap.
+        if (maxSlots < 0) {
+            maxSlots = -1;
+        }
+        getJdbcTemplate().update("UPDATE subscription SET int_max_slots=? WHERE pk_subscription=?",
+                maxSlots, sub.getSubscriptionId());
+    }
 }

@@ -98,7 +98,7 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
             + "WHERE "
                 + "pk_proc=? "
             + "RETURNING int_cores_reserved, int_mem_reserved, "
-                + "int_gpus_reserved, int_gpu_mem_reserved";
+                + "int_gpus_reserved, int_gpu_mem_reserved, int_slots_reserved";
     // spotless:on
 
     public boolean deleteVirtualProc(VirtualProc proc) {
@@ -113,6 +113,7 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
             proc.memoryReserved = ((Number) result.get("int_mem_reserved")).longValue();
             proc.gpusReserved = ((Number) result.get("int_gpus_reserved")).intValue();
             proc.gpuMemoryReserved = ((Number) result.get("int_gpu_mem_reserved")).longValue();
+            proc.slotsReserved = ((Number) result.get("int_slots_reserved")).intValue();
         } catch (EmptyResultDataAccessException e) {
             // Debug, not info: with the scheduler's batched completion flush
             // this is the EXPECTED path for every completed proc (the flush
@@ -144,9 +145,10 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
                 + "int_gpu_mem_reserved, "
                 + "int_gpu_mem_pre_reserved, "
                 + "int_gpu_mem_used, "
-                + "b_local "
+                + "b_local, "
+                + "int_slots_reserved "
                 + ") "
-            + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ";
+            + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ";
     // spotless:on
 
     public void insertVirtualProc(VirtualProc proc) {
@@ -161,7 +163,8 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
                     proc.getHostId(), proc.getShowId(), proc.getLayerId(), proc.getJobId(),
                     proc.getFrameId(), proc.coresReserved, proc.memoryReserved, proc.memoryReserved,
                     memReservedMin, proc.gpusReserved, proc.gpuMemoryReserved,
-                    proc.gpuMemoryReserved, memGpuReservedMin, proc.isLocalDispatch);
+                    proc.gpuMemoryReserved, memGpuReservedMin, proc.isLocalDispatch,
+                    proc.slotsReserved);
 
             // Update all of the resource counts
             procCreated(proc);
@@ -240,7 +243,7 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
                     proc.getLayerId(), proc.getJobId(), proc.getFrameId(), proc.coresReserved,
                     proc.memoryReserved, proc.memoryReserved, memReservedMin, proc.gpusReserved,
                     proc.gpuMemoryReserved, proc.gpuMemoryReserved, memGpuReservedMin,
-                    proc.isLocalDispatch});
+                    proc.isLocalDispatch, proc.slotsReserved});
         }
 
         // Host idle is reserved up-front by reserveHostResourcesBatch (a guarded,
@@ -282,6 +285,22 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
             }
         }
         return affordable;
+    }
+
+    @Override
+    public Map<String, Integer> getFreeSlots(java.util.Collection<String> hostIds) {
+        Map<String, Integer> free = new HashMap<String, Integer>();
+        if (hostIds == null || hostIds.isEmpty()) {
+            return free;
+        }
+        String in = String.join(",", Collections.nCopies(hostIds.size(), "?"));
+        getJdbcTemplate().query("SELECT h.pk_host, h.int_concurrent_slots_limit - COALESCE(("
+                + "SELECT SUM(p.int_slots_reserved) FROM proc p WHERE p.pk_host = h.pk_host"
+                + "), 0) AS free FROM host h WHERE h.int_concurrent_slots_limit >= 0 "
+                + "AND h.pk_host IN (" + in + ")", rs -> {
+                    free.put(rs.getString("pk_host"), rs.getInt("free"));
+                }, hostIds.toArray());
+        return free;
     }
 
     @Override
@@ -691,6 +710,7 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
             proc.memoryReserved = rs.getLong("int_mem_reserved");
             proc.memoryMax = rs.getLong("int_mem_max_used");
             proc.gpusReserved = rs.getInt("int_gpus_reserved");
+            proc.slotsReserved = rs.getInt("int_slots_reserved");
             proc.gpuMemoryReserved = rs.getLong("int_gpu_mem_reserved");
             proc.gpuMemoryMax = rs.getLong("int_gpu_mem_max_used");
             proc.virtualMemoryMax = rs.getLong("int_virt_max_used");
@@ -720,6 +740,7 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
                 + "host.pk_alloc, "
                 + "alloc.pk_facility,"
                 + "proc.int_cores_reserved,"
+                + "proc.int_slots_reserved,"
                 + "proc.int_mem_reserved,"
                 + "proc.int_mem_max_used,"
                 + "proc.int_mem_used,"

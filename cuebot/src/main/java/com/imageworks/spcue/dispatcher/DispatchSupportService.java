@@ -442,6 +442,7 @@ public class DispatchSupportService implements DispatchSupport {
                 affordable.add(b);
             }
         }
+        affordable = fitSlots(affordable);
         if (affordable.isEmpty()) {
             return java.util.Collections.emptyList();
         }
@@ -524,6 +525,48 @@ public class DispatchSupportService implements DispatchSupport {
         // FRAME_STARTED events are published by the caller via
         // publishFrameStartedEvents, outside this transaction.
         return winners;
+    }
+
+    /**
+     * SLOT GATE, the slot counterpart of the capacity gate: on each slot host, keep the slot
+     * bookings that fit under its concurrent slots limit, counted from the procs the host holds
+     * now. The capacity gate has already locked these host rows, so no other commit can add slots
+     * to them before this transaction ends. Bookings past the cap, and any slot booking on a host
+     * that is not a slot host, stay WAITING for the next tick, and their host reservation is given
+     * back.
+     */
+    private List<FrameBooking> fitSlots(List<FrameBooking> affordable) {
+        Set<String> slotHosts = new java.util.HashSet<String>();
+        for (FrameBooking b : affordable) {
+            if (b.proc.slotsReserved > 0) {
+                slotHosts.add(b.proc.getHostId());
+            }
+        }
+        if (slotHosts.isEmpty()) {
+            return affordable;
+        }
+        Map<String, Integer> free = procDao.getFreeSlots(slotHosts);
+        List<FrameBooking> fit = new ArrayList<FrameBooking>(affordable.size());
+        List<VirtualProc> overCap = new ArrayList<VirtualProc>();
+        for (FrameBooking b : affordable) {
+            if (b.proc.slotsReserved > 0) {
+                Integer room = free.get(b.proc.getHostId());
+                if (room == null || room < b.proc.slotsReserved) {
+                    overCap.add(b.proc);
+                    continue;
+                }
+                free.put(b.proc.getHostId(), room - b.proc.slotsReserved);
+            }
+            fit.add(b);
+        }
+        if (overCap.isEmpty()) {
+            return affordable;
+        }
+        procDao.refundHostResourcesBatch(overCap);
+        logger.warn("slot gate kept " + overCap.size() + " booking(s) WAITING: their slot host is"
+                + " at its concurrent slots limit (the cap changed after planning, or the host is"
+                + " not a slot host)");
+        return fit;
     }
 
     @Override
@@ -706,8 +749,9 @@ public class DispatchSupportService implements DispatchSupport {
                 .setJobName(frame.jobName).setFrameId(frame.id).setFrameName(frame.name)
                 .setLayerId(frame.getLayerId()).setResourceId(proc.getProcId())
                 .setNumCores(proc.coresReserved).setNumGpus(proc.gpusReserved)
-                .setStartTime(System.currentTimeMillis()).setIgnoreNimby(proc.isLocalDispatch)
-                .setOs(proc.os).setSoftMemoryLimit(frame.softMemoryLimit).setLokiUrl(frame.lokiURL)
+                .setSlotsRequired(proc.slotsReserved).setStartTime(System.currentTimeMillis())
+                .setIgnoreNimby(proc.isLocalDispatch).setOs(proc.os)
+                .setSoftMemoryLimit(frame.softMemoryLimit).setLokiUrl(frame.lokiURL)
                 .setHardMemoryLimit(frame.hardMemoryLimit)
                 .putAllEnvironment(jobDao.getEnvironment(frame))
                 .putAllEnvironment(layerDao.getLayerEnvironment(frame)).putEnvironment("CUE3", "1")
