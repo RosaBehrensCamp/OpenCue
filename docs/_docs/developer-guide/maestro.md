@@ -675,6 +675,47 @@ frames, the group count must stay at the number of specs, and the dead pin
 must show `no host`. Fail-first on the tree before this feature: the four real
 pins completed 0 frames each at 100% utilisation.
 
+### 3.11 Slots (concurrency-bound layers)
+
+A slot layer (`layer.int_slots_required > 0`) books by concurrency instead of
+cores and memory: each frame reserves 0 cores, 0 memory and its slots, and runs
+unpinned. A slot host (`host.int_concurrent_slots_limit >= 0`) runs only slot
+layers, up to its cap. See the *Slot-Based Booking* concept page for the user
+view; this is how Maestro plans it.
+
+- **Pairing is a group cut.** `HostSpecKey` carries a `slotHost` bit, so slot
+  hosts form their own groups and `groupCandidates` (and `pinHost`) admit only
+  slot layers there and only regular layers everywhere else. Nothing in
+  `placeOnce` has to reason about mixed pairs.
+- **Zero core-side demand.** The candidate read zeroes a slot layer's cores,
+  memory and gpus and marks it non-threadable, so memory sizing, the probe gate,
+  reservations (width gate), the soft per-host cap and the core score all skip
+  it. Slots are the one dimension it has: `fitsOnHost` checks free slots,
+  `placementScore` adds an E-PVM term over slots (spreading slot frames across
+  slot hosts by utilization), and `computeMaxMore` bounds by free slots.
+- **max_slots replaces the core caps.** A slot layer is never held by a job's
+  max cores, a folder's max cores or the show's core burst: the candidate read
+  does not filter it on them and `subAdmits` admits it whatever the burst. It is
+  bounded by the job, folder and subscription `int_max_slots` (-1 unlimited, 0
+  reject all) instead, in `gate()`/`slotCapFrames`, spent tick-wide like the core
+  caps (`jobSlotsUsed`, `folderSlotsUsed`, `showSlotsUsed`). A blocked slot layer
+  waits as `limit` (a slot cap) or `capacity` (every slot host is full).
+- **Usage is read, not kept.** The host snapshot, candidate read and
+  subscription read each sum `proc.int_slots_reserved`, only for slot hosts and
+  layers. There is no slot counter to drift or repair.
+- **Commit.** `planHost` builds a slot proc with `VirtualProc.buildSlot`
+  (0 cores, 0 memory, the frame's slots), the proc insert writes
+  `int_slots_reserved`, and RQD receives `slots_required`.
+- **The host slot cap is guarded at commit, like host cores.** Right after the
+  guarded host update has locked each host row, `startFramesAndProcsBatch`
+  reads each slot host's free slots from the procs it holds now and keeps only
+  the slot bookings that fit; the rest stay WAITING for the next tick (and a
+  slot booking on a host that is not a slot host never lands). The planner
+  stays the first line, so this only fires when the cap moved under a plan.
+  The job, folder and subscription `max_slots`, like their cores counterparts,
+  are plan-time caps. The legacy dispatcher never books slot work: it skips slot
+  hosts in `HostReportHandler` and slot layers in its frame queries.
+
 ## 4. Concurrency model
 
 Maestro reasons over an in-memory snapshot while commits and external

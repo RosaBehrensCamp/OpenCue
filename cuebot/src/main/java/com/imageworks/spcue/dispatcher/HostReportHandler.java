@@ -297,7 +297,10 @@ public class HostReportHandler {
             long memReservedMin =
                     env.getRequiredProperty("dispatcher.memory.mem_reserved_min", Long.class);
 
-            if (!isTempDirStorageEnough(report.getHost().getTotalMcp(),
+            if (host.concurrentSlotsLimit >= 0) {
+                // A slot host runs only slot layers, which only Maestro books.
+                msg = host + " is slot-based; only Maestro books it.";
+            } else if (!isTempDirStorageEnough(report.getHost().getTotalMcp(),
                     report.getHost().getFreeMcp(), host.getOs())) {
                 msg = String.format(
                         "%s doesn't have enough free space in the temporary directory (mcp), %dMB",
@@ -776,6 +779,10 @@ public class HostReportHandler {
 
         try {
             VirtualProc proc = hostManager.getVirtualProc(frame.getResourceId());
+            // A slot proc reserves no memory by design; it is never overboard.
+            if (proc.slotsReserved > 0) {
+                return false;
+            }
             double reserved = (double) proc.memoryReserved;
 
             // Last memory report is higher than the threshold
@@ -815,7 +822,9 @@ public class HostReportHandler {
         try {
             proc = hostManager.getVirtualProc(frame.getResourceId());
 
-            if (proc.isLocalDispatch) {
+            // Slot procs reserve no memory; growing a reservation would only eat the
+            // slot host's idle memory for nothing.
+            if (proc.isLocalDispatch || proc.slotsReserved > 0) {
                 return;
             }
 

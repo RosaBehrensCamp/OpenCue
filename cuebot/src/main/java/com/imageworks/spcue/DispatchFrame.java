@@ -44,6 +44,10 @@ public class DispatchFrame extends FrameEntity implements FrameInterface {
     public int maxGpus;
     public long minGpuMemory;
 
+    // Concurrency slots each frame requires (layer.int_slots_required). 0 = not slot-based. Only
+    // read by Maestro's frame-by-layer query; every legacy frame query skips slot layers.
+    public int slotsRequired;
+
     // A comma separated list of services
     public String services;
 

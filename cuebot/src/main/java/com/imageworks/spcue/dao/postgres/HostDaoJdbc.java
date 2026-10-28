@@ -234,6 +234,7 @@ public class HostDaoJdbc extends JdbcDaoSupport implements HostDao {
                     host.tags = rs.getString("str_tags");
                     host.setOs(rs.getString("str_os"));
                     host.hardwareState = HardwareState.valueOf(rs.getString("str_state"));
+                    host.concurrentSlotsLimit = rs.getInt("int_concurrent_slots_limit");
                     return host;
                 }
             };
@@ -257,6 +258,7 @@ public class HostDaoJdbc extends JdbcDaoSupport implements HostDao {
             + "  host.b_nimby, "
             + "  host.int_thread_mode, "
             + "  host.str_tags, "
+            + "  host.int_concurrent_slots_limit, "
             + "  host_stat.str_os, "
             + "  host_stat.str_state, "
             + "  alloc.pk_facility "
@@ -577,6 +579,17 @@ public class HostDaoJdbc extends JdbcDaoSupport implements HostDao {
     public void updateThreadMode(HostInterface host, ThreadMode mode) {
         getJdbcTemplate().update("UPDATE host SET int_thread_mode=? WHERE pk_host=?",
                 mode.getNumber(), host.getHostId());
+    }
+
+    @Override
+    public void updateConcurrentSlotsLimit(HostInterface host, int limit) {
+        // -1 disables slot mode; >= 0 caps concurrent slots. Maestro enforces the cap at plan
+        // time against SUM(proc.int_slots_reserved), so there is no counter to update here.
+        if (limit < 0) {
+            limit = -1;
+        }
+        getJdbcTemplate().update("UPDATE host SET int_concurrent_slots_limit=? WHERE pk_host=?",
+                limit, host.getHostId());
     }
 
     @Override

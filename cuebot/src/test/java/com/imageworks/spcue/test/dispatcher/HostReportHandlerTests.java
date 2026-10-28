@@ -575,6 +575,38 @@ public class HostReportHandlerTests extends TransactionalTest {
     @Test
     @Transactional
     @Rollback(true)
+    public void testSlotFrameIsNeverMemoryOverboard() {
+        jobLauncher.testMode = true;
+        dispatcher.setTestMode(true);
+        jobLauncher.launch(new File("src/test/resources/conf/jobspec/jobspec_simple.xml"));
+
+        DispatchHost host = getHost(hostname);
+        List<VirtualProc> procs = dispatcher.dispatchHost(host);
+        assertEquals(1, procs.size());
+        VirtualProc proc = procs.get(0);
+        // A slot proc reserves no memory, so any rss would read as overboard.
+        jdbcTemplate.update("UPDATE proc SET int_slots_reserved = 1 WHERE pk_proc = ?",
+                proc.getProcId());
+
+        long memoryOverboard = (long) Math.ceil((double) proc.memoryReserved * 1.6);
+        RunningFrameInfo info = RunningFrameInfo.newBuilder().setJobId(proc.getJobId())
+                .setLayerId(proc.getLayerId()).setFrameId(proc.getFrameId())
+                .setResourceId(proc.getProcId()).setRss(memoryOverboard).setMaxRss(memoryOverboard)
+                .build();
+        HostReport report = HostReport.newBuilder().setHost(getRenderHost(hostname))
+                .setCoreInfo(getCoreDetail(200, 200, 0, 0)).addFrames(info).build();
+
+        long killCount = DispatchSupport.killedOffenderProcs.get();
+        hostReportHandler.handleHostReport(report, false);
+        assertEquals(killCount, DispatchSupport.killedOffenderProcs.get());
+        assertEquals(Long.valueOf(proc.memoryReserved),
+                jdbcTemplate.queryForObject("SELECT int_mem_reserved FROM proc WHERE pk_proc = ?",
+                        Long.class, proc.getProcId()));
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
     public void testMemoryAggressionMaxRss() {
         jobLauncher.testMode = true;
         dispatcher.setTestMode(true);

@@ -397,6 +397,28 @@ public class JobDaoJdbc extends JdbcDaoSupport implements JobDao {
     }
 
     @Override
+    public void updateMaxSlots(GroupInterface g, int v) {
+        // Slots are whole counts: -1 unlimited, 0 reject-all, N cap.
+        if (v < 0) {
+            v = CueUtil.FEATURE_DISABLED;
+        }
+        getJdbcTemplate().update(
+                "UPDATE job_resource SET int_max_slots=? WHERE "
+                        + "pk_job IN (SELECT pk_job FROM job WHERE pk_folder=?)",
+                v, g.getGroupId());
+    }
+
+    @Override
+    public void updateMaxSlots(JobInterface j, int v) {
+        // Slots are whole counts: -1 unlimited, 0 reject-all, N cap.
+        if (v < 0) {
+            v = CueUtil.FEATURE_DISABLED;
+        }
+        getJdbcTemplate().update("UPDATE job_resource SET int_max_slots=? WHERE pk_job=?", v,
+                j.getJobId());
+    }
+
+    @Override
     public void updateMinGpus(GroupInterface g, int v) {
         getJdbcTemplate().update(
                 "UPDATE job_resource SET int_min_gpus=? WHERE "

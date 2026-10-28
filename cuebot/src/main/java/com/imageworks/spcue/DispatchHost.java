@@ -53,6 +53,9 @@ public class DispatchHost extends Entity
     public boolean isNimby;
     public boolean isLocalDispatch = false;
 
+    // host.int_concurrent_slots_limit: -1 = regular host, >= 0 = slot-based host (Maestro only).
+    public int concurrentSlotsLimit = -1;
+
     /**
      * Number of cores that will be added to the first proc booked to this host.
      */

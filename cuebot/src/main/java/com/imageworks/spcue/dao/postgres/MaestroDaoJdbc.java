@@ -72,7 +72,14 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             + "  h.int_gpu_mem_idle, "
             + "  h.int_procs, "
             + "  h.str_tags, "
-            + "  hs.str_os "
+            + "  hs.str_os, "
+            // Slot hosts only: the cap and the slots their procs hold. Summed per slot host
+            // (i_proc_pkhost), so regular hosts cost nothing.
+            + "  h.int_concurrent_slots_limit, "
+            + "  CASE WHEN h.int_concurrent_slots_limit >= 0 THEN "
+            + "    (SELECT COALESCE(SUM(p.int_slots_reserved), 0) FROM proc p "
+            + "      WHERE p.pk_host = h.pk_host) "
+            + "  ELSE 0 END AS slots_in_use "
             + "FROM host h, host_stat hs, alloc a "
             + "WHERE h.pk_host = hs.pk_host "
             + "  AND a.pk_alloc = h.pk_alloc "
@@ -135,7 +142,21 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             // folder's running cores as the database counts them (see the fr join).
             + "  j.pk_folder AS folder_id, "
             + "  COALESCE(fr.int_max_cores, -1) AS folder_max, "
-            + "  COALESCE(fr.int_cores, 0)      AS folder_running "
+            + "  COALESCE(fr.int_cores, 0)      AS folder_running, "
+            // Slot layers: slots per frame, and the job and folder slot caps (-1 =
+            // unlimited, 0 = reject all) with the slots their procs hold, summed only
+            // for slot layers.
+            + "  l.int_slots_required, "
+            + "  jr.int_max_slots AS job_max_slots, "
+            + "  COALESCE(fr.int_max_slots, -1) AS folder_max_slots, "
+            + "  CASE WHEN l.int_slots_required > 0 THEN "
+            + "    (SELECT COALESCE(SUM(p.int_slots_reserved), 0) FROM proc p "
+            + "      WHERE p.pk_job = j.pk_job) "
+            + "  ELSE 0 END AS job_slots_in_use, "
+            + "  CASE WHEN l.int_slots_required > 0 THEN "
+            + "    (SELECT COALESCE(SUM(p.int_slots_reserved), 0) FROM proc p "
+            + "      JOIN job fj ON fj.pk_job = p.pk_job WHERE fj.pk_folder = j.pk_folder) "
+            + "  ELSE 0 END AS folder_slots_in_use "
             + "FROM   layer l "
             + "JOIN   job j           ON j.pk_job  = l.pk_job "
             + "JOIN   job_resource jr ON jr.pk_job = j.pk_job "
@@ -154,7 +175,8 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             + "LEFT JOIN folder_resource fr ON fr.pk_folder = j.pk_folder "
             + "WHERE  j.str_state = 'PENDING' "
             + "  AND  j.b_paused  = false "
-            + "  AND  jr.int_cores  < jr.int_max_cores "
+            // Slot layers reserve no cores: only max_slots binds them, in Maestro.
+            + "  AND (l.int_slots_required > 0 OR jr.int_cores < jr.int_max_cores) "
             // Dispatchable-frame test and waiting_frame_count both come from
             // layer_stat.int_waiting_count (maintained by core trigger
             // trigger__update_frame_status_counts; WAITING frames are depend-resolved,
@@ -169,15 +191,23 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             // ceiling is enforced by the post-plan folder trim in Maestro.doTick, which,
             // unlike this filter, also binds the frames planHost books in the tick
             // that crosses the cap.
-            + "  AND (COALESCE(fr.int_max_cores, -1) = -1 "
+            + "  AND (l.int_slots_required > 0 OR COALESCE(fr.int_max_cores, -1) = -1 "
             + "       OR COALESCE(fr.int_cores, 0) + l.int_cores_min <= fr.int_max_cores) "
             + "  AND (? OR sh.b_scheduler_managed = true) ";
 
     // Every subscription, read once per tick beside the candidate rows: a show is a
     // candidate on a group only through its subscription to the group's allocation,
     // and only while under its burst (Maestro.groupCandidates).
+    // Each subscription also carries its slot cap and the slots the show's procs hold on
+    // the allocation's hosts.
     private static final String SELECT_SUBSCRIPTIONS =
-            "SELECT pk_show, pk_alloc, int_cores, int_burst, int_size FROM subscription";
+            "SELECT s.pk_show, s.pk_alloc, s.int_cores, s.int_burst, s.int_size, "
+                    + "s.int_max_slots, COALESCE(u.slots, 0) AS slots_in_use "
+                    + "FROM subscription s LEFT JOIN ("
+                    + "SELECT p.pk_show, h.pk_alloc, SUM(p.int_slots_reserved) AS slots "
+                    + "FROM proc p JOIN host h ON h.pk_host = p.pk_host "
+                    + "WHERE p.int_slots_reserved > 0 GROUP BY p.pk_show, h.pk_alloc) u "
+                    + "ON u.pk_show = s.pk_show AND u.pk_alloc = s.pk_alloc";
     // spotless:on
 
     // A proc carries pk_layer directly, so no join is needed. A just-completed proc has been
@@ -207,6 +237,9 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             host.runningProcs = rs.getInt("int_procs");
             host.tagsRaw = rs.getString("str_tags");
             host.os = rs.getString("str_os");
+            host.slotsLimit = rs.getInt("int_concurrent_slots_limit");
+            if (host.slotsLimit >= 0)
+                host.slotsIdle = host.slotsLimit - rs.getInt("slots_in_use");
             return host;
         }
     };
@@ -243,6 +276,21 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
                     // limit work with one reference check.
                     List<String> limitIds = Maestro.splitIds(rs.getString("limit_ids"));
                     candidate.limitIds = limitIds.isEmpty() ? null : limitIds;
+                    candidate.slotsRequired = rs.getInt("int_slots_required");
+                    if (candidate.slotsRequired > 0) {
+                        // A slot frame reserves no cores, memory or gpus, only slots: zero
+                        // the core-side demand so fit, score, sizing and core caps skip it.
+                        candidate.layerCoresMin = 0;
+                        candidate.layerCoresMax = 0;
+                        candidate.layerMemMin = 0;
+                        candidate.layerGpusMin = 0;
+                        candidate.layerGpuMemMin = 0;
+                        candidate.threadable = false;
+                        candidate.jobMaxSlots = rs.getInt("job_max_slots");
+                        candidate.jobSlotsInUse = rs.getInt("job_slots_in_use");
+                        candidate.folderMaxSlots = rs.getInt("folder_max_slots");
+                        candidate.folderSlotsInUse = rs.getInt("folder_slots_in_use");
+                    }
                     return candidate;
                 }
             };
@@ -363,7 +411,8 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
         return getJdbcTemplate().query(SELECT_SUBSCRIPTIONS,
                 (rs, rowNum) -> new SubscriptionUsage(rs.getString("pk_show"),
                         rs.getString("pk_alloc"), rs.getLong("int_cores"), rs.getLong("int_burst"),
-                        rs.getLong("int_size")));
+                        rs.getLong("int_size"), rs.getInt("int_max_slots"),
+                        rs.getInt("slots_in_use")));
     }
 
     @Override

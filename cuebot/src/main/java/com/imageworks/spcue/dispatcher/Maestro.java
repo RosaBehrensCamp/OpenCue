@@ -243,6 +243,11 @@ public class Maestro {
     private final Map<String, Integer> jobCoresUsed = new HashMap<>();
     private final Map<String, Integer> showCoresUsed = new HashMap<>();
     private final Map<String, Integer> folderUsed = new HashMap<>();
+    // Slots held tick-wide by job, folder and show|alloc: seeded from the candidate read, spent
+    // as slot layers place (see slotCapFrames).
+    private final Map<String, Integer> jobSlotsUsed = new HashMap<>();
+    private final Map<String, Integer> folderSlotsUsed = new HashMap<>();
+    private final Map<String, Integer> showSlotsUsed = new HashMap<>();
     private final Map<String, Integer> folderMaxCp = new HashMap<>();
     private final Map<String, Integer> folderRunSeed = new HashMap<>();
     private final Map<String, String> jobFolderCap = new HashMap<>();
@@ -775,6 +780,9 @@ public class Maestro {
         lastCoresTotalCp = 0;
         lastCoresIdleCp = 0;
         for (BookableHost host : allHosts) {
+            // A slot host sells slots, not cores: its cores would read as idle forever.
+            if (host.isSlotHost())
+                continue;
             lastCoresTotalCp += host.coresTotal;
             lastCoresIdleCp += host.coresIdle;
             if (host.coresIdle >= Dispatcher.CORE_POINTS_RESERVED_MIN)
@@ -819,7 +827,8 @@ public class Maestro {
         int folderTrimmed = 0;
         for (FrameBooking booking : planned) {
             String fid = jobFolderCap.get(booking.proc.getJobId());
-            if (fid == null) {
+            // A slot proc holds no cores, so the folder's core ceiling never binds it.
+            if (fid == null || booking.proc.slotsReserved > 0) {
                 keep.add(booking);
                 continue;
             }
@@ -998,6 +1007,9 @@ public class Maestro {
         jobCoresUsed.clear();
         showCoresUsed.clear();
         folderUsed.clear();
+        jobSlotsUsed.clear();
+        folderSlotsUsed.clear();
+        showSlotsUsed.clear();
         folderMaxCp.clear();
         folderRunSeed.clear();
         jobFolderCap.clear();
@@ -1033,7 +1045,8 @@ public class Maestro {
             MaestroMetrics.TickStats stats) {
         List<BookableHost> idleGroup = new ArrayList<>();
         for (BookableHost host : fullGroup) {
-            if (host.coresIdle >= Dispatcher.CORE_POINTS_RESERVED_MIN)
+            if (host.isSlotHost() ? host.slotsIdle > 0
+                    : host.coresIdle >= Dispatcher.CORE_POINTS_RESERVED_MIN)
                 idleGroup.add(host);
         }
         int maxCoresTotalInGroup =
@@ -2333,7 +2346,8 @@ public class Maestro {
         List<CandidateRow> rows = maestroDao.getCandidateRows(MaestroMode.facility(env));
         Map<String, long[]> subs = new HashMap<>();
         for (MaestroDao.SubscriptionUsage sub : maestroDao.getSubscriptions()) {
-            subs.put(subKey(sub.showId, sub.allocId), new long[] {sub.cores, sub.burst, sub.size});
+            subs.put(subKey(sub.showId, sub.allocId),
+                    new long[] {sub.cores, sub.burst, sub.size, sub.maxSlots, sub.slotsInUse});
         }
         return new TickCandidates(rows, subs);
     }
@@ -2361,24 +2375,47 @@ public class Maestro {
                 continue;
             if (!jobOsAllowed(row.jobOs, spec.os))
                 continue;
-            if (spec.allThreadMode && !candidate.threadable)
+            // Strict pairing: slot layers run only on slot hosts and the reverse.
+            if ((candidate.slotsRequired > 0) != spec.slotHost)
+                continue;
+            if (spec.allThreadMode && !candidate.threadable && !spec.slotHost)
                 continue;
             if (candidate.layerCoresMin > maxIdleInGroup)
                 continue;
             long[] sub = tick.subscriptions.get(subKey(candidate.showId, spec.pkAlloc));
-            if (sub == null || sub[0] >= sub[1])
+            if (!subAdmits(candidate, sub))
                 continue;
             if (!tags.matches(spec.tagsNormalized, row.tags))
                 continue;
             if (!seen.add(candidate.layerId))
                 continue;
             LayerCandidate out = candidate.copyForGroup();
-            out.showCoresInUse = (int) sub[0];
-            out.showBurstCores = (int) sub[1];
-            out.showSizeCores = (int) sub[2];
+            applySub(out, sub);
             admitted.add(out);
         }
         return drawByPriority(admitted, limit, random);
+    }
+
+    /**
+     * Whether a show's subscription to an allocation admits candidate there: a regular layer while
+     * the show is under its core burst; a slot layer unless the subscription's max_slots rejects
+     * all slot work, since slot frames reserve no cores and only max_slots binds them.
+     */
+    static boolean subAdmits(LayerCandidate candidate, long[] sub) {
+        if (sub == null)
+            return false;
+        if (candidate.slotsRequired > 0)
+            return sub.length < 5 || sub[3] != 0;
+        return sub[0] < sub[1];
+    }
+
+    /** Stamp a subscription's figures on a group's copy of a candidate. */
+    static void applySub(LayerCandidate candidate, long[] sub) {
+        candidate.showCoresInUse = (int) sub[0];
+        candidate.showBurstCores = (int) sub[1];
+        candidate.showSizeCores = (int) sub[2];
+        candidate.showMaxSlots = sub.length < 5 ? -1 : (int) sub[3];
+        candidate.showSlotsInUse = sub.length < 5 ? 0 : (int) sub[4];
     }
 
     /**
@@ -2549,8 +2586,8 @@ public class Maestro {
     static HostSpecKey hostSpecKey(BookableHost host) {
         return new HostSpecKey(host.pkAlloc, host.pkFacility,
                 normalizeTags(host.tagsRaw, host.hostName), host.os,
-                host.gpusTotal > 0 || host.gpuMemTotal > 0,
-                host.threadMode == ThreadMode.ALL_VALUE);
+                host.gpusTotal > 0 || host.gpuMemTotal > 0, host.threadMode == ThreadMode.ALL_VALUE,
+                host.isSlotHost());
     }
 
     /**
@@ -2632,20 +2669,20 @@ public class Maestro {
             Map<HostSpecKey, Map<String, LayerCandidate>> byGroup) {
         LayerCandidate candidate = row.row;
         if (!Objects.equals(row.facilityId, host.pkFacility) || !jobOsAllowed(row.jobOs, host.os)
-                || (host.threadMode == ThreadMode.ALL_VALUE && !candidate.threadable)
+                || (candidate.slotsRequired > 0) != host.isSlotHost()
+                || (host.threadMode == ThreadMode.ALL_VALUE && !candidate.threadable
+                        && !host.isSlotHost())
                 || candidate.layerCoresMin > host.coresTotal)
             return false;
         long[] sub = tick.subscriptions.get(subKey(candidate.showId, host.pkAlloc));
-        if (sub == null || sub[0] >= sub[1])
+        if (!subAdmits(candidate, sub))
             return true;
         Map<String, LayerCandidate> inGroup =
                 byGroup.computeIfAbsent(hostSpecKey(host), key -> new LinkedHashMap<>());
         LayerCandidate pin = inGroup.get(candidate.layerId);
         if (pin == null) {
             pin = candidate.copyForGroup();
-            pin.showCoresInUse = (int) sub[0];
-            pin.showBurstCores = (int) sub[1];
-            pin.showSizeCores = (int) sub[2];
+            applySub(pin, sub);
             pin.pinnedHosts = new ArrayList<>();
             pin.pinnedIds = new HashSet<>();
             inGroup.put(candidate.layerId, pin);
@@ -2803,7 +2840,11 @@ public class Maestro {
             // of a layer that books under the legacy dispatcher but not here.
             if (logger.isDebugEnabled() && !placed && candidate.waitingFrameCount > 0) {
                 String why;
-                if (candidate.jobCoresInUse + candidate.layerCoresMin > candidate.jobMaxCores)
+                if (candidate.slotsRequired > 0 && candidate.slotCapFrames <= 0)
+                    why = "slotCap";
+                else if (candidate.slotsRequired > 0)
+                    why = limitUsable <= 0 ? "limitFull(" + candidate.limitIds + ")" : "noSlotHost";
+                else if (candidate.jobCoresInUse + candidate.layerCoresMin > candidate.jobMaxCores)
                     why = "jobMaxCores";
                 else if (candidate.showCoresInUse
                         + candidate.layerCoresMin > candidate.showBurstCores)
@@ -3028,6 +3069,12 @@ public class Maestro {
                 }
             }
         }
+        if (candidate.slotsRequired > 0) {
+            // Slot layers reserve no cores: max_slots replaces every core cap.
+            candidate.slotCapFrames = slotCapFrames(candidate, groupAllocId);
+            gate.capped = candidate.slotCapFrames <= 0 || gate.limitUsable <= 0;
+            return gate;
+        }
         gate.folderInUse = (candidate.folderMax >= 0)
                 ? folderUsed.computeIfAbsent(candidate.folderId, key -> candidate.folderRunning)
                 : 0;
@@ -3040,6 +3087,34 @@ public class Maestro {
                         && gate.folderInUse + candidate.layerCoresMin > candidate.folderMax)
                 || gate.limitUsable <= 0;
         return gate;
+    }
+
+    /**
+     * Frames of a slot layer its job, folder and subscription max_slots still allow, against the
+     * tick-wide slot usage (placements made earlier this tick, in any group, count). A cap of -1 is
+     * unlimited and 0 rejects all slot work.
+     */
+    private int slotCapFrames(LayerCandidate candidate, String groupAllocId) {
+        int frames = slotRoom(candidate.jobMaxSlots,
+                jobSlotsUsed.computeIfAbsent(candidate.jobId, key -> candidate.jobSlotsInUse),
+                candidate.slotsRequired);
+        frames = Math.min(frames,
+                slotRoom(candidate.folderMaxSlots, folderSlotsUsed
+                        .computeIfAbsent(candidate.folderId, key -> candidate.folderSlotsInUse),
+                        candidate.slotsRequired));
+        frames = Math.min(frames,
+                slotRoom(candidate.showMaxSlots,
+                        showSlotsUsed.computeIfAbsent(subKey(candidate.showId, groupAllocId),
+                                key -> candidate.showSlotsInUse),
+                        candidate.slotsRequired));
+        return frames;
+    }
+
+    /** Frames of slotsPerFrame that fit under a slot cap; -1 is unlimited. */
+    static int slotRoom(int maxSlots, int slotsInUse, int slotsPerFrame) {
+        if (maxSlots < 0)
+            return Integer.MAX_VALUE;
+        return Math.max(0, (maxSlots - slotsInUse) / slotsPerFrame);
     }
 
     /**
@@ -3184,6 +3259,13 @@ public class Maestro {
         best.memIdle -= estMem;
         best.gpusIdle -= estGpus;
         best.gpuMemIdle -= estGpuMem;
+        if (candidate.slotsRequired > 0) {
+            int estSlots = estFrames * candidate.slotsRequired;
+            best.slotsIdle -= estSlots;
+            jobSlotsUsed.merge(candidate.jobId, estSlots, Integer::sum);
+            folderSlotsUsed.merge(candidate.folderId, estSlots, Integer::sum);
+            showSlotsUsed.merge(subKey(candidate.showId, groupAllocId), estSlots, Integer::sum);
+        }
         candidate.jobCoresInUse += estCores;
         candidate.showCoresInUse += estCores;
         candidate.waitingFrameCount -= estFrames;
@@ -3485,7 +3567,10 @@ public class Maestro {
         return wCores * deltaCost(host.coresTotal, host.coresIdle, candidate.layerCoresMin)
                 + wMem * deltaCost(host.memTotal, host.memIdle, candidate.layerMemMin)
                 + wGpus * deltaCost(host.gpusTotal, host.gpusIdle, candidate.layerGpusMin)
-                + wGpuMem * deltaCost(host.gpuMemTotal, host.gpuMemIdle, candidate.layerGpuMemMin);
+                + wGpuMem * deltaCost(host.gpuMemTotal, host.gpuMemIdle, candidate.layerGpuMemMin)
+                // Slots: the only dimension a slot layer uses, so it spreads slot frames
+                // across slot hosts by utilization; 0 on regular hosts and layers.
+                + deltaCost(host.slotsLimit, host.slotsIdle, candidate.slotsRequired);
     }
 
     /**
@@ -3518,6 +3603,9 @@ public class Maestro {
         // FRAME limits: one frame is one token, budgets shared tick-wide.
         if (limitUsable != Integer.MAX_VALUE)
             est = Math.min(est, limitUsable);
+        // Slot caps (job, folder, subscription max_slots), stamped by gate().
+        if (candidate.slotsRequired > 0)
+            est = Math.min(est, candidate.slotCapFrames);
         // Folder ceiling (cores, not frames).
         if (candidate.folderMax >= 0 && candidate.layerCoresMin > 0)
             est = Math.min(est, (candidate.folderMax - folderUsed.get(candidate.folderId))
@@ -3551,6 +3639,9 @@ public class Maestro {
             maxMore = Math.min(maxMore, remGpus / candidate.layerGpusMin);
         if (candidate.layerGpuMemMin > 0)
             maxMore = Math.min(maxMore, remGpuMem / candidate.layerGpuMemMin);
+        if (candidate.slotsRequired > 0)
+            maxMore = Math.min(maxMore,
+                    (host.slotsIdle - candidate.slotsRequired) / candidate.slotsRequired);
 
         if (candidate.layerCoresMin > 0) {
             long jobRem = (long) candidate.jobMaxCores - candidate.jobCoresInUse
@@ -3759,6 +3850,9 @@ public class Maestro {
 
     /** Whether one frame of candidate fits host's idle capacity right now, in every dimension. */
     static boolean fitsOnHost(LayerCandidate candidate, BookableHost host) {
+        if (candidate.slotsRequired > 0 || host.isSlotHost())
+            return candidate.slotsRequired > 0 && host.isSlotHost()
+                    && host.slotsIdle >= candidate.slotsRequired;
         if (host.coresIdle < candidate.layerCoresMin)
             return false;
         if (host.memIdle < candidate.layerMemMin)
@@ -3779,6 +3873,12 @@ public class Maestro {
      * waitlist buckets via {@link #waitlistReason}.
      */
     static String classifyFragmentation(LayerCandidate candidate, List<BookableHost> hosts) {
+        if (candidate.slotsRequired > 0) {
+            for (BookableHost host : hosts)
+                if (fitsOnHost(candidate, host))
+                    return "fit";
+            return "slots";
+        }
         boolean anyCores = false;
         boolean anyMem = false;
         for (BookableHost host : hosts) {
@@ -3835,10 +3935,12 @@ public class Maestro {
     String waitlistReason(LayerCandidate candidate, List<BookableHost> hosts, int folderInUse,
             int limitUsable, List<LimitBudget> limitSeatPools,
             Map<String, Set<String>> limitSeats) {
-        if (candidate.jobCoresInUse + candidate.layerCoresMin > candidate.jobMaxCores
-                || candidate.showCoresInUse + candidate.layerCoresMin > candidate.showBurstCores
-                || (candidate.folderMax >= 0
-                        && folderInUse + candidate.layerCoresMin > candidate.folderMax))
+        if (candidate.slotsRequired > 0 ? candidate.slotCapFrames <= 0
+                : candidate.jobCoresInUse + candidate.layerCoresMin > candidate.jobMaxCores
+                        || candidate.showCoresInUse
+                                + candidate.layerCoresMin > candidate.showBurstCores
+                        || (candidate.folderMax >= 0
+                                && folderInUse + candidate.layerCoresMin > candidate.folderMax))
             return "limit";
         if (limitUsable <= 0)
             return "no license";
@@ -3849,6 +3951,9 @@ public class Maestro {
             return fit;
         if ("license".equals(fit))
             return "no license";
+        // Every slot host is at its slot cap: the slot farm is full.
+        if ("slots".equals(fit))
+            return "capacity";
         if ("cores".equals(fit)) {
             long idleSum = 0;
             for (BookableHost host : hosts)
@@ -3912,6 +4017,14 @@ public class Maestro {
         public int runningProcs;
         public String tagsRaw;
         public String os;
+        // host.int_concurrent_slots_limit: -1 = regular host, >= 0 = slot host, which runs only
+        // slot layers. slotsIdle is the cap less the slots its procs hold; decremented in-tick.
+        public int slotsLimit = -1;
+        public int slotsIdle;
+
+        boolean isSlotHost() {
+            return slotsLimit >= 0;
+        }
     }
 
     public static final class LayerCandidate {
@@ -3962,6 +4075,17 @@ public class Maestro {
         public String folderId;
         public int folderMax;
         public int folderRunning;
+        // Slot layers: slots per frame (0 = not slot-based) and the job, folder and subscription
+        // max_slots (-1 = unlimited, 0 = reject all) with the slots each already holds. A slot
+        // layer's core-side demand is zero (MaestroDaoJdbc), so only these bind it.
+        public int slotsRequired;
+        public int jobMaxSlots = -1;
+        public int jobSlotsInUse;
+        public int folderMaxSlots = -1;
+        public int folderSlotsInUse;
+        public int showMaxSlots = -1;
+        public int showSlotsInUse;
+        int slotCapFrames; // stamped by gate(), consumed by headroomFrames and the waitlist
         List<BookableHost> pinnedHosts; // consumed by addPinned() and the epilogue's reservation
         Set<String> pinnedIds; // consumed by pinsAllow()
         List<BookableHost> pinnedIdle; // consumed by placeOnce()
@@ -3998,6 +4122,11 @@ public class Maestro {
             candidate.folderId = folderId;
             candidate.folderMax = folderMax;
             candidate.folderRunning = folderRunning;
+            candidate.slotsRequired = slotsRequired;
+            candidate.jobMaxSlots = jobMaxSlots;
+            candidate.jobSlotsInUse = jobSlotsInUse;
+            candidate.folderMaxSlots = folderMaxSlots;
+            candidate.folderSlotsInUse = folderSlotsInUse;
             return candidate;
         }
     }
@@ -4097,15 +4226,24 @@ public class Maestro {
         // the candidate query binds it per group, so mode must split the key.
         // One bit suffices: legacy itself normalizes every other mode to AUTO.
         final boolean allThreadMode;
+        // Slot hosts run only slot layers and regular hosts only regular ones, so the strict
+        // pairing is a group cut (groupCandidates), like the thread mode.
+        final boolean slotHost;
 
         HostSpecKey(String pkAlloc, String pkFacility, String tagsNormalized, String os,
                 boolean hasGpu, boolean allThreadMode) {
+            this(pkAlloc, pkFacility, tagsNormalized, os, hasGpu, allThreadMode, false);
+        }
+
+        HostSpecKey(String pkAlloc, String pkFacility, String tagsNormalized, String os,
+                boolean hasGpu, boolean allThreadMode, boolean slotHost) {
             this.pkAlloc = pkAlloc;
             this.pkFacility = pkFacility;
             this.tagsNormalized = tagsNormalized;
             this.os = os;
             this.hasGpu = hasGpu;
             this.allThreadMode = allThreadMode;
+            this.slotHost = slotHost;
         }
 
         @Override
@@ -4116,7 +4254,7 @@ public class Maestro {
                 return false;
             HostSpecKey spec = (HostSpecKey) other;
             return hasGpu == spec.hasGpu && allThreadMode == spec.allThreadMode
-                    && Objects.equals(pkAlloc, spec.pkAlloc)
+                    && slotHost == spec.slotHost && Objects.equals(pkAlloc, spec.pkAlloc)
                     && Objects.equals(pkFacility, spec.pkFacility)
                     && Objects.equals(tagsNormalized, spec.tagsNormalized)
                     && Objects.equals(os, spec.os);
@@ -4124,14 +4262,15 @@ public class Maestro {
 
         @Override
         public int hashCode() {
-            return Objects.hash(pkAlloc, pkFacility, tagsNormalized, os, hasGpu, allThreadMode);
+            return Objects.hash(pkAlloc, pkFacility, tagsNormalized, os, hasGpu, allThreadMode,
+                    slotHost);
         }
 
         @Override
         public String toString() {
             return "HostSpec(alloc=" + pkAlloc + ", facility=" + pkFacility + ", tags="
                     + tagsNormalized + ", os=" + os + ", gpu=" + hasGpu + ", threadAll="
-                    + allThreadMode + ")";
+                    + allThreadMode + ", slots=" + slotHost + ")";
         }
     }
 

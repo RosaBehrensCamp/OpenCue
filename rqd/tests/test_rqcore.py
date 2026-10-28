@@ -389,6 +389,22 @@ class RqCoreTests(unittest.TestCase):
         with self.assertRaises(rqd.rqexceptions.CoreReservationFailureException):
             self.rqcore.launchFrame(frame)
 
+    @mock.patch("rqd.rqcore.FrameAttendantThread")
+    def test_launchSlotFrameWithZeroCores(self, frameThreadMock):
+        self.rqcore.cores = opencue_proto.report_pb2.CoreDetail(
+            total_cores=100, idle_cores=0
+        )
+        self.machineMock.return_value.state = opencue_proto.host_pb2.UP
+        self.nimbyMock.return_value.locked = False
+        frame = opencue_proto.rqd_pb2.RunFrame(uid=22, num_cores=0, slots_required=1)
+        rqd.rqconstants.OVERRIDE_NIMBY = None
+
+        self.rqcore.launchFrame(frame)
+
+        frameThreadMock.return_value.start.assert_called()
+        self.assertEqual(0, self.rqcore.cores.idle_cores)
+        self.assertEqual(0, self.rqcore.cores.booked_cores)
+
     def test_launchFrameWithInsufficientCores(self):
         self.rqcore.cores = opencue_proto.report_pb2.CoreDetail(
             total_cores=100, idle_cores=5

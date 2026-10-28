@@ -130,20 +130,32 @@ public interface MaestroDao {
         }
     }
 
-    /** One subscription's figures, in core points. */
+    /**
+     * One subscription's figures, in core points, plus its slot cap (-1 = unlimited, 0 = reject all
+     * slot work) and the slots the show's procs hold on the allocation.
+     */
     final class SubscriptionUsage {
         public final String showId;
         public final String allocId;
         public final long cores;
         public final long burst;
         public final long size;
+        public final int maxSlots;
+        public final int slotsInUse;
 
         public SubscriptionUsage(String showId, String allocId, long cores, long burst, long size) {
+            this(showId, allocId, cores, burst, size, -1, 0);
+        }
+
+        public SubscriptionUsage(String showId, String allocId, long cores, long burst, long size,
+                int maxSlots, int slotsInUse) {
             this.showId = showId;
             this.allocId = allocId;
             this.cores = cores;
             this.burst = burst;
             this.size = size;
+            this.maxSlots = maxSlots;
+            this.slotsInUse = slotsInUse;
         }
     }
 
