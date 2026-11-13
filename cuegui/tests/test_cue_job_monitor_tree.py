@@ -199,10 +199,10 @@ class CueJobMonitorTreeTests(unittest.TestCase):
         self.assertEqual(
             {'root': True, 'g1': True, 'g2': True, 'g3': False, 'g4': True}, self._expanded())
 
-    def _showJobs(self, *jobs):
+    def _showJobs(self, *jobs, **group_fields):
         """Updates the tree with the jobs in a group of the show."""
         root = opencue_proto.job_pb2.NestedGroup(id='root', name=self.show_name)
-        group = root.groups.nested_groups.add(id='g1', name='g1')
+        group = root.groups.nested_groups.add(id='g1', name='g1', **group_fields)
         group.parent.CopyFrom(opencue_proto.job_pb2.NestedGroup(id='root', name=self.show_name))
         for job in jobs:
             group.jobs.append(job.id)
@@ -246,7 +246,7 @@ class CueJobMonitorTreeTests(unittest.TestCase):
             [info[cuegui.Constants.COLUMN_INFO_DISPLAY](item.rpcObject)
              for info in tree.getColumnInfo(cuegui.Constants.TYPE_JOB)],
             display)
-        self.assertEqual(['job1', 3, '2.50', 4], [display[0], display[3], display[4], display[6]])
+        self.assertEqual(['job1', 3, '2.50', 4], [display[0], display[3], display[4], display[7]])
         self.assertEqual([theme.COLOR_JOB_FOREGROUND] * len(display),
                          self._cells(item, qtpy.QtCore.Qt.ForegroundRole))
         background = self._cells(item, qtpy.QtCore.Qt.BackgroundRole)
@@ -288,12 +288,12 @@ class CueJobMonitorTreeTests(unittest.TestCase):
 
         self.assertIs(item, self.cue_job_monitor_tree._items['job1'])
         self.assertEqual(5, item.data(3, qtpy.QtCore.Qt.DisplayRole))
-        self.assertEqual([cuegui.Style.ColorTheme.COLOR_JOB_PAUSED_BACKGROUND] * 21,
+        self.assertEqual([cuegui.Style.ColorTheme.COLOR_JOB_PAUSED_BACKGROUND] * 23,
                          self._cells(item, qtpy.QtCore.Qt.BackgroundRole))
         self.assertIsInstance(
             item.data(cuegui.CueJobMonitorTree.COLUMN_COMMENT, qtpy.QtCore.Qt.DecorationRole),
             qtpy.QtGui.QIcon)
-        self.assertEqual(5, item.data(9, cuegui.ItemDelegate.BOOKING_ROLE)[0])
+        self.assertEqual(5, item.data(10, cuegui.ItemDelegate.BOOKING_ROLE)[0])
 
     def test_unchangedJobOnlyUpdatesAge(self):
         job = self._job(waiting_frames=1)
@@ -311,7 +311,7 @@ class CueJobMonitorTreeTests(unittest.TestCase):
         self.assertEqual('001:00', item.data(cuegui.CueJobMonitorTree.COLUMN_AGE,
                                              qtpy.QtCore.Qt.DisplayRole))
         # The job has been waiting without running frames for too long.
-        self.assertEqual([cuegui.Style.ColorTheme.COLOR_JOB_WITHOUT_PROCS] * 21,
+        self.assertEqual([cuegui.Style.ColorTheme.COLOR_JOB_WITHOUT_PROCS] * 23,
                          self._cells(item, qtpy.QtCore.Qt.BackgroundRole))
 
     def test_groupCellsAreBaked(self):
@@ -323,18 +323,37 @@ class CueJobMonitorTreeTests(unittest.TestCase):
                 ('root', self.show_name, theme.COLOR_SHOW_FOREGROUND, theme.COLOR_SHOW_BACKGROUND),
                 ('g1', 'g1', theme.COLOR_GROUP_FOREGROUND, theme.COLOR_GROUP_BACKGROUND)):
             item = items[itemId]
-            self.assertEqual([foreground] * 21, self._cells(item, qtpy.QtCore.Qt.ForegroundRole))
-            self.assertEqual([background] * 21, self._cells(item, qtpy.QtCore.Qt.BackgroundRole))
-            self.assertEqual([cuegui.CueJobMonitorTree.FONT_BOLD] * 21,
+            self.assertEqual([foreground] * 23, self._cells(item, qtpy.QtCore.Qt.ForegroundRole))
+            self.assertEqual([background] * 23, self._cells(item, qtpy.QtCore.Qt.BackgroundRole))
+            self.assertEqual([cuegui.CueJobMonitorTree.FONT_BOLD] * 23,
                              self._cells(item, qtpy.QtCore.Qt.FontRole))
             self.assertIsInstance(item.data(0, qtpy.QtCore.Qt.DecorationRole), qtpy.QtGui.QIcon)
             self.assertEqual(name, item.data(0, qtpy.QtCore.Qt.DisplayRole))
+
+    def test_slotCells(self):
+        now = int(time.time())
+        self._showJobs(
+            opencue_proto.job_pb2.Job(
+                id='job1', name='job1', start_time=now, max_slots=-1,
+                job_stats=opencue_proto.job_pb2.JobStats(reserved_slots=2)),
+            opencue_proto.job_pb2.Job(id='job2', name='job2', start_time=now, max_slots=5),
+            stats=opencue_proto.job_pb2.GroupStats(reserved_slots=2), max_slots=4)
+        tree = self.cue_job_monitor_tree
+        names = [info[cuegui.AbstractTreeWidget.COLUMN_NAME]
+                 for info in tree.getColumnInfo(cuegui.Constants.TYPE_JOB)]
+        columns = (names.index('Slots'), names.index('Max Slots'))
+        self.assertEqual((names.index('Gpus') + 1, names.index('Max Gpus') + 1), columns)
+
+        for itemId, cells in (('job1', ['2', '']), ('job2', ['0', 5]), ('g1', ['2', 4])):
+            item = tree._items[itemId]
+            self.assertEqual(cells, [item.data(col, qtpy.QtCore.Qt.DisplayRole)
+                                     for col in columns])
 
     def test_bookingBarPaintsBakedData(self):
         self._showJobs(self._job(running_frames=3, waiting_frames=4, reserved_cores=3))
         tree = self.cue_job_monitor_tree
         item = tree._items['job1']
-        delegate = tree.itemDelegateForColumn(9)
+        delegate = tree.itemDelegateForColumn(10)
         self.assertIsInstance(delegate, cuegui.ItemDelegate.JobBookingBarDelegate)
         image = qtpy.QtGui.QImage(150, 20, qtpy.QtGui.QImage.Format_ARGB32)
         painter = qtpy.QtGui.QPainter(image)
@@ -343,7 +362,7 @@ class CueJobMonitorTreeTests(unittest.TestCase):
 
         try:
             with mock.patch.object(tree, 'itemFromIndex') as item_from_index_mock:
-                delegate.paint(painter, option, tree.indexFromItem(item, 9))
+                delegate.paint(painter, option, tree.indexFromItem(item, 10))
         finally:
             painter.end()
 

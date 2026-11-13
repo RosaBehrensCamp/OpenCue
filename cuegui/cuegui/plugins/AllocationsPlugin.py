@@ -105,11 +105,23 @@ class MonitorAllocations(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                                                    for host in allocation.getHosts()
                                                    if host.state() == 4))
 
-        self.addColumn("Hosts", 55, id=8,
+        self.addColumn("Slots", 50, id=8,
+                       data=lambda alloc: alloc.data.stats.slots,
+                       sort=lambda alloc: alloc.data.stats.slots,
+                       tip="The total concurrent slots limit of the slot-based\n"
+                           "hosts in the allocation.")
+
+        self.addColumn("Slots Idle", 60, id=9,
+                       data=lambda alloc: alloc.data.stats.available_slots,
+                       sort=lambda alloc: alloc.data.stats.available_slots,
+                       tip="The number of slots not reserved by running frames\n"
+                           "on slot-based hosts that are up and unlocked.")
+
+        self.addColumn("Hosts", 55, id=10,
                        data=lambda alloc: alloc.data.stats.hosts,
                        sort=lambda alloc: alloc.data.stats.hosts)
 
-        self.addColumn("Locked", 65, id=9,
+        self.addColumn("Locked", 65, id=11,
                        data=lambda alloc: alloc.totalLockedHosts()
                                           + len([host for host in alloc.getHosts()
                                                      if host.lockState() == 2]),
@@ -117,11 +129,11 @@ class MonitorAllocations(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                                           + len([host for host in alloc.getHosts()
                                                      if host.lockState() == 2]))
 
-        self.addColumn("Down", 55, id=10,
+        self.addColumn("Down", 55, id=12,
                        data=lambda alloc: alloc.totalDownHosts(),
                        sort=lambda alloc: alloc.totalDownHosts())
 
-        self.addColumn("Repair", 50, id=11,
+        self.addColumn("Repair", 50, id=13,
                        data=lambda allocation: len([host
                                                     for host in allocation.getHosts()
                                                     if host.state() == 4]),

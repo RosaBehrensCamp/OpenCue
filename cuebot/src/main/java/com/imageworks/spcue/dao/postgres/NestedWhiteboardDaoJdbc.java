@@ -112,6 +112,7 @@ public class NestedWhiteboardDaoJdbc extends JdbcDaoSupport implements NestedWhi
                 + "folder_resource.int_max_cores AS folder_max_cores, "
                 + "folder_resource.int_min_gpus AS folder_min_gpus, "
                 + "folder_resource.int_max_gpus AS folder_max_gpus, "
+                + "folder_resource.int_max_slots AS folder_max_slots, "
                 + "folder_level.int_level, "
                 + "job.pk_job, "
                 + "job.str_name, "
@@ -148,6 +149,8 @@ public class NestedWhiteboardDaoJdbc extends JdbcDaoSupport implements NestedWhi
                 + "job_usage.int_clock_time_success, "
                 + "(job_resource.int_cores + job_resource.int_local_cores) AS int_cores, "
                 + "(job_resource.int_gpus + job_resource.int_local_gpus) AS int_gpus, "
+                + "COALESCE((SELECT SUM(proc.int_slots_reserved) FROM proc "
+                    + "WHERE proc.pk_job = job.pk_job), 0) AS int_slots_reserved, "
                 + "job_resource.int_min_cores, "
                 + "job_resource.int_min_gpus, "
                 + "job_resource.int_max_cores, "
@@ -264,7 +267,8 @@ public class NestedWhiteboardDaoJdbc extends JdbcDaoSupport implements NestedWhi
                         .setMaxCores(Convert.coreUnitsToCores(rs.getInt("folder_max_cores")))
                         .setMinCores(Convert.coreUnitsToCores(rs.getInt("folder_min_cores")))
                         .setMaxGpus(rs.getInt("folder_max_gpus"))
-                        .setMinGpus(rs.getInt("folder_min_gpus")).setLevel(rs.getInt("int_level"))
+                        .setMinGpus(rs.getInt("folder_min_gpus"))
+                        .setMaxSlots(rs.getInt("folder_max_slots")).setLevel(rs.getInt("int_level"))
                         .setDepartment(rs.getString("dept_name")).build();
 
                 String parentGroupId = rs.getString("pk_parent_folder");
@@ -294,6 +298,7 @@ public class NestedWhiteboardDaoJdbc extends JdbcDaoSupport implements NestedWhi
                         .setWaitingFrames(oldStats.getWaitingFrames() + jobStats.getWaitingFrames())
                         .setDependFrames(oldStats.getDependFrames() + jobStats.getDependFrames())
                         .setReservedCores(oldStats.getReservedCores() + jobStats.getReservedCores())
+                        .setReservedSlots(oldStats.getReservedSlots() + jobStats.getReservedSlots())
                         .setPendingJobs(oldStats.getPendingJobs() + 1).build();
 
                 Job inlineJob = WhiteboardDaoJdbc.JOB_MAPPER.mapRow(rs, rowNum);

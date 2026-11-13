@@ -151,6 +151,8 @@ message ShowStats {
     int64 failed_frame_count = 8;
     float reserved_cores = 9;
     float reserved_gpus = 10;
+    // Concurrency slots reserved by the show's running frames on slot hosts.
+    int32 reserved_slots = 11;
 }
 
 

@@ -111,6 +111,10 @@ message AllocationStats {
     float idle_gpus = 11;
     float running_gpus = 12;
     float locked_gpus = 13;
+    // Total concurrent slots limit of the allocation's slot hosts.
+    int32 slots = 14;
+    // Slots not reserved by running frames on slot hosts that are UP and OPEN.
+    int32 available_slots = 15;
 }
 
 

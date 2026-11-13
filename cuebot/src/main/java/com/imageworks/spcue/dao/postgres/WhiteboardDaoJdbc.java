@@ -1074,6 +1074,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                             .setIdleGpus(rs.getInt("int_idle_gpus"))
                             .setRunningGpus(rs.getInt("int_running_gpus"))
                             .setLockedGpus(rs.getInt("int_locked_gpus"))
+                            .setSlots(rs.getInt("int_slots"))
+                            .setAvailableSlots(rs.getInt("int_available_slots"))
                             .setHosts(rs.getInt("int_hosts"))
                             .setDownHosts(rs.getInt("int_down_hosts"))
                             .setLockedHosts(rs.getInt("int_locked_hosts")).build())
@@ -1090,7 +1092,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                     .setDependFrames(rs.getInt("int_depend_count"))
                     .setPendingJobs(rs.getInt("int_job_count"))
                     .setReservedCores(Convert.coreUnitsToCores(rs.getInt("int_cores")))
-                    .setReservedGpus(rs.getInt("int_gpus")).build();
+                    .setReservedGpus(rs.getInt("int_gpus"))
+                    .setReservedSlots(rs.getInt("int_slots_reserved")).build();
             return Group.newBuilder().setId(SqlUtil.getString(rs, "pk_folder"))
                     .setName(SqlUtil.getString(rs, "group_name"))
                     .setDepartment(SqlUtil.getString(rs, "str_dept"))
@@ -1170,8 +1173,10 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
 
         JobStats.Builder statsBuilder = JobStats.newBuilder()
                 .setReservedCores(Convert.coreUnitsToCores(rs.getInt("int_cores")))
-                .setReservedGpus(rs.getInt("int_gpus")).setMaxRss(rs.getLong("int_max_rss"))
-                .setMaxPss(rs.getLong("int_max_pss")).setTotalFrames(rs.getInt("int_frame_count"))
+                .setReservedGpus(rs.getInt("int_gpus"))
+                .setReservedSlots(rs.getInt("int_slots_reserved"))
+                .setMaxRss(rs.getLong("int_max_rss")).setMaxPss(rs.getLong("int_max_pss"))
+                .setTotalFrames(rs.getInt("int_frame_count"))
                 .setTotalLayers(rs.getInt("int_layer_count"))
                 .setWaitingFrames(rs.getInt("int_waiting_count"))
                 .setRunningFrames(rs.getInt("int_running_count"))
@@ -1516,6 +1521,7 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                             .setFailedFrameCount(rs.getLong("int_frame_fail_count"))
                             .setReservedCores(Convert.coreUnitsToCores(rs.getInt("int_cores")))
                             .setReservedGpus(rs.getInt("int_gpus"))
+                            .setReservedSlots(rs.getInt("int_slots_reserved"))
                             .setPendingJobs(rs.getInt("int_job_count")).build();
             return Show.newBuilder().setId(SqlUtil.getString(rs, "pk_show"))
                     .setName(SqlUtil.getString(rs, "str_name")).setActive(rs.getBoolean("b_active"))
@@ -1732,7 +1738,19 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "vs_alloc_usage.int_locked_gpus,"
                 + "vs_alloc_usage.int_hosts,"
                 + "vs_alloc_usage.int_locked_hosts,"
-                + "vs_alloc_usage.int_down_hosts "
+                + "vs_alloc_usage.int_down_hosts,"
+                + "COALESCE((SELECT SUM(host.int_concurrent_slots_limit) FROM host "
+                    + "WHERE host.pk_alloc = alloc.pk_alloc "
+                    + "AND host.int_concurrent_slots_limit > 0), 0) AS int_slots,"
+                + "COALESCE((SELECT SUM(GREATEST(h.int_concurrent_slots_limit - COALESCE("
+                    + "(SELECT SUM(proc.int_slots_reserved) FROM proc "
+                    + "WHERE proc.pk_host = h.pk_host), 0), 0)) "
+                    + "FROM host h, host_stat hs "
+                    + "WHERE h.pk_host = hs.pk_host "
+                    + "AND h.pk_alloc = alloc.pk_alloc "
+                    + "AND h.int_concurrent_slots_limit > 0 "
+                    + "AND h.str_lock_state = 'OPEN' "
+                    + "AND hs.str_state = 'UP'), 0) AS int_available_slots "
             + "FROM "
                 + "alloc, "
                 + "facility, "
@@ -1884,7 +1902,10 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "c.int_dead_count,"
                 + "c.int_job_count,"
                 + "c.int_cores,"
-                + "c.int_gpus "
+                + "c.int_gpus, "
+                + "COALESCE((SELECT SUM(proc.int_slots_reserved) FROM proc, job "
+                    + "WHERE proc.pk_job = job.pk_job "
+                    + "AND job.pk_folder = folder.pk_folder), 0) AS int_slots_reserved "
             + "FROM "
                 + "folder, "
                 + "folder_level,"
@@ -1963,6 +1984,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "job_mem.int_max_pss,"
                 + "(job_resource.int_cores + job_resource.int_local_cores) AS int_cores,"
                 + "(job_resource.int_gpus + job_resource.int_local_gpus) AS int_gpus, "
+                + "COALESCE((SELECT SUM(proc.int_slots_reserved) FROM proc "
+                    + "WHERE proc.pk_job = job.pk_job), 0) AS int_slots_reserved, "
                 + "job.str_loki_url "
             + "FROM "
                 + "job,"
@@ -2130,6 +2153,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "COALESCE(vs_show_stat.int_dead_count,0) AS int_dead_count,"
                 + "COALESCE(vs_show_resource.int_cores,0) AS int_cores, "
                 + "COALESCE(vs_show_resource.int_gpus,0) AS int_gpus, "
+                + "COALESCE((SELECT SUM(proc.int_slots_reserved) FROM proc "
+                    + "WHERE proc.pk_show = show.pk_show), 0) AS int_slots_reserved, "
                 + "COALESCE(vs_show_stat.int_job_count,0) AS int_job_count "
             + "FROM "
                 + "show "

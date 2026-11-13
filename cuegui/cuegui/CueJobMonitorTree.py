@@ -54,8 +54,8 @@ Body = namedtuple("Body", "group_names, group_ids, job_names, job_ids")
 
 COLUMN_COMMENT = 1
 COLUMN_EAT = 2
-COLUMN_AGE = 14
-COLUMN_MAXRSS = 17
+COLUMN_AGE = 16
+COLUMN_MAXRSS = 19
 FONT_BOLD = QtGui.QFont("Luxi Sans", -1, QtGui.QFont.Bold)
 UPDATE_INTERVAL = 5
 
@@ -115,68 +115,78 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        data=lambda job: "%d" % job.data.job_stats.reserved_gpus,
                        sort=lambda job: job.data.job_stats.reserved_gpus,
                        tip="The number of reserved gpus.")
-        self.addColumn("Wait", 45, id=7,
+        self.addColumn("Slots", 45, id=7,
+                       data=lambda job: "%d" % job.data.job_stats.reserved_slots,
+                       sort=lambda job: job.data.job_stats.reserved_slots,
+                       tip="The number of slots reserved on slot-based hosts.")
+        self.addColumn("Wait", 45, id=8,
                        data=lambda job: job.data.job_stats.waiting_frames,
                        sort=lambda job: job.data.job_stats.waiting_frames,
                        tip="The number of waiting frames.")
-        self.addColumn("Depend", 55, id=8,
+        self.addColumn("Depend", 55, id=9,
                        data=lambda job: job.data.job_stats.depend_frames,
                        sort=lambda job: job.data.job_stats.depend_frames,
                        tip="The number of dependent frames.")
-        self.addColumn("Total", 50, id=9,
+        self.addColumn("Total", 50, id=10,
                        data=lambda job: job.data.job_stats.total_frames,
                        sort=lambda job: job.data.job_stats.total_frames,
                        tip="The total number of frames.")
-        self.addColumn("_Booking Bar", 150, id=10,
+        self.addColumn("_Booking Bar", 150, id=11,
                        delegate=cuegui.ItemDelegate.JobBookingBarDelegate)
-        self.addColumn("Min", 38, id=11,
+        self.addColumn("Min", 38, id=12,
                        data=lambda job: "%.0f" % job.data.min_cores,
                        sort=lambda job: job.data.min_cores,
                        tip="The minimum number of running cores that the cuebot\n"
                            "will try to maintain.")
-        self.addColumn("Max", 38, id=12,
+        self.addColumn("Max", 38, id=13,
                        data=lambda job: "%.0f" % job.data.max_cores,
                        sort=lambda job: job.data.max_cores,
                        tip="The maximum number of running cores that the cuebot\n"
                            "will allow.")
-        self.addColumn("Min Gpus", 38, id=13,
+        self.addColumn("Min Gpus", 38, id=14,
                        data=lambda job: "%d" % job.data.min_gpus,
                        sort=lambda job: job.data.min_gpus,
                        tip="The minimum number of running gpus that the cuebot\n"
                            "will try to maintain.")
-        self.addColumn("Max Gpus", 38, id=14,
+        self.addColumn("Max Gpus", 38, id=15,
                        data=lambda job: "%d" % job.data.max_gpus,
                        sort=lambda job: job.data.max_gpus,
                        tip="The maximum number of running gpus that the cuebot\n"
                            "will allow.")
+        self.addColumn("Max Slots", 38, id=16,
+                       data=lambda job: job.data.max_slots if job.data.max_slots >= 0 else "",
+                       sort=lambda job: job.data.max_slots,
+                       tip="The maximum number of slots that the cuebot will allow\n"
+                           "the job's slot-based layers to reserve. Blank means\n"
+                           "unlimited.")
         self.addColumn(
-            "Age", 50, id=15,
+            "Age", 50, id=17,
             data=lambda job: cuegui.Utils.secondsToHHHMM(self.currtime - job.data.start_time),
             sort=lambda job: self.currtime - job.data.start_time,
             tip="The HOURS:MINUTES since the job was launched.")
-        self.addColumn("Pri", 30, id=16,
+        self.addColumn("Pri", 30, id=18,
                        data=lambda job: job.data.priority,
                        sort=lambda job: job.data.priority,
                        tip="The job priority. The cuebot uses this as a suggestion\n"
                            "to determine what job needs the next available matching\n"
                            "resource.")
-        self.addColumn("ETA", 65, id=17,
+        self.addColumn("ETA", 65, id=19,
                        data=lambda job: "",
                        tip="(Inacurate and disabled until a better solution exists)\n"
                            "A very rough estimate of the number of HOURS:MINUTES\n"
                            "it will be before the entire job is done.")
-        self.addColumn("MaxRss", 60, id=18,
+        self.addColumn("MaxRss", 60, id=20,
                        data=lambda job: cuegui.Utils.memoryToString(job.data.job_stats.max_rss),
                        sort=lambda job: job.data.job_stats.max_rss,
                        tip="The most memory used at one time by any single frame.")
-        self.addColumn("MaxGpuMem", 60, id=19,
+        self.addColumn("MaxGpuMem", 60, id=21,
                        data=lambda job: cuegui.Utils.memoryToString(
                            job.data.job_stats.max_gpu_memory),
                        sort=lambda job: job.data.job_stats.max_gpu_memory,
                        tip="The most gpu memory used at one time by any single frame.")
-        self.addColumn("_Blank", 20, id=20,
+        self.addColumn("_Blank", 20, id=22,
                        tip="Spacer")
-        self.addColumn("Progress", 0, id=21,
+        self.addColumn("Progress", 0, id=23,
                        delegate=cuegui.ItemDelegate.JobThinProgressBarDelegate,
                        tip="A visual overview of the job progress.\n"
                            "Green \t is succeeded\n"
@@ -198,29 +208,34 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
             self.addColumn("", 0, id=6,
                            data=lambda group: "%d" % group.data.stats.reserved_gpus)
             self.addColumn("", 0, id=7,
+                           data=lambda group: "%d" % group.data.stats.reserved_slots)
+            self.addColumn("", 0, id=8,
                            data=lambda group: group.data.stats.waiting_frames)
-            self.addColumn("", 0, id=8)
             self.addColumn("", 0, id=9)
             self.addColumn("", 0, id=10)
-            self.addColumn("", 0, id=11,
-                           data=lambda group: (group.data.min_cores or ""))
+            self.addColumn("", 0, id=11)
             self.addColumn("", 0, id=12,
+                           data=lambda group: (group.data.min_cores or ""))
+            self.addColumn("", 0, id=13,
                            data=lambda group: (
                                    group.data.max_cores > 0 and group.data.max_cores or ""))
-            self.addColumn("", 0, id=13,
-                           data=lambda group: (group.data.min_gpus or ""))
             self.addColumn("", 0, id=14,
+                           data=lambda group: (group.data.min_gpus or ""))
+            self.addColumn("", 0, id=15,
                            data=lambda group: (
                                    group.data.max_gpus > 0 and group.data.max_gpus or ""))
-            self.addColumn("", 0, id=15)
-            self.addColumn("", 0, id=16)
+            self.addColumn("", 0, id=16,
+                           data=lambda group: (
+                                   group.data.max_slots if group.data.max_slots >= 0 else ""))
             self.addColumn("", 0, id=17)
             self.addColumn("", 0, id=18)
             self.addColumn("", 0, id=19)
-            self.addColumn("", 0, id=20,
+            self.addColumn("", 0, id=20)
+            self.addColumn("", 0, id=21)
+            self.addColumn("", 0, id=22,
                            data=lambda group: (group.data.department != "Unknown" and
                                                group.data.department or ""))
-            self.addColumn("", 0, id=21)
+            self.addColumn("", 0, id=23)
 
         # Guards against overlapping ticks: at a 5s cadence the previous
         # _getUpdate may not have finished yet on a cold cache miss; skipping

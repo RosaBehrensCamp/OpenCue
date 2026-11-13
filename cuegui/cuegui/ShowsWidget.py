@@ -45,13 +45,18 @@ class ShowsWidget(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         self.addColumn("Cores Run", 80, id=2,
                        data=lambda show: ("%.2f" % show.data.show_stats.reserved_cores),
                        sort=lambda show: (show.data.show_stats.reserved_cores))
-        self.addColumn("Frames Run", 80, id=3,
+        self.addColumn("Slots Run", 80, id=3,
+                       data=lambda show: (show.data.show_stats.reserved_slots),
+                       sort=lambda show: (show.data.show_stats.reserved_slots),
+                       tip="The number of slots reserved by the show's running\n"
+                           "frames on slot-based hosts.")
+        self.addColumn("Frames Run", 80, id=4,
                        data=lambda show: (show.data.show_stats.running_frames),
                        sort=lambda show: (show.data.show_stats.running_frames))
-        self.addColumn("Frames Pending", 80, id=4,
+        self.addColumn("Frames Pending", 80, id=5,
                        data=lambda show: (show.data.show_stats.pending_frames),
                        sort=lambda show: (show.data.show_stats.pending_frames))
-        self.addColumn("Jobs", 80, id=5,
+        self.addColumn("Jobs", 80, id=6,
                        data=lambda show: (show.data.show_stats.pending_jobs),
                        sort=lambda show: (show.data.show_stats.pending_jobs))
 
