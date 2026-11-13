@@ -950,6 +950,34 @@ public class WhiteboardDaoTests extends AbstractTransactionalJUnit4SpringContext
     @Test
     @Transactional
     @Rollback(true)
+    public void testSlotsRequiredOnLayersAndFrames() {
+        JobDetail job = launchJob();
+        LayerInterface slotLayer = layerDao.findLayer(job, "pass_1");
+        jdbcTemplate.update("UPDATE layer SET int_slots_required = 2 WHERE pk_layer = ?",
+                slotLayer.getLayerId());
+
+        for (Layer layer : whiteboardDao.getLayers(job).getLayersList()) {
+            assertEquals(layer.getName(), layer.getName().equals("pass_1") ? 2 : 0,
+                    layer.getSlotsRequired());
+        }
+        assertEquals(2, whiteboardDao.getLayer(slotLayer.getLayerId()).getSlotsRequired());
+        assertEquals(2, whiteboardDao.findLayer(job.name, "pass_1").getSlotsRequired());
+
+        FrameSearchInterface r = frameSearchFactory.create(job);
+        FrameSeq frames = whiteboardDao.getFrames(r);
+        assertTrue(frames.getFramesCount() > 0);
+        for (Frame frame : frames.getFramesList()) {
+            assertEquals(frame.getName(), frame.getLayerName().equals("pass_1") ? 2 : 0,
+                    frame.getSlotsRequired());
+        }
+        assertEquals(2, whiteboardDao.findFrame(job.name, "pass_1", 1).getSlotsRequired());
+        String frameId = frameDao.findFrame(job, "0001-pass_1").getFrameId();
+        assertEquals(2, whiteboardDao.getFrame(frameId).getSlotsRequired());
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
     public void testGetDepartment() {
         ShowInterface show = showDao.findShowDetail("pipe");
         DepartmentInterface dept = departmentDao.getDefaultDepartment();
