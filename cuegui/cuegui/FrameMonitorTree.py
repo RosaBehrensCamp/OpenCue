@@ -58,11 +58,11 @@ QCOLOR_GREEN = QtGui.QColor(QtCore.Qt.green)
 # Visual column indices, keyed to the order of addColumn() calls below.
 # Update these whenever a column is inserted/removed/reordered.
 STATUS_COLUMN = 3
-PROC_COLUMN = 6
-CHECKPOINT_COLUMN = 8
-RUNTIME_COLUMN = 10
-MEMORY_COLUMN = 12
-LASTLINE_COLUMN = 20
+PROC_COLUMN = 7
+CHECKPOINT_COLUMN = 9
+RUNTIME_COLUMN = 11
+MEMORY_COLUMN = 13
+LASTLINE_COLUMN = 21
 
 LOCALRESOURCE = "%s/" % os.getenv("HOST", "unknown").split(".")[0]
 
@@ -110,29 +110,34 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        data=lambda job, frame: (self.getCores(frame, format_as_string=True) or ""),
                        sort=lambda job, frame: (self.getCores(frame)),
                        tip="The number of cores a frame is using")
-        self.addColumn("GPUs", 55, id=6,
+        self.addColumn("Slots", 55, id=6,
+                       data=lambda job, frame: frame.data.slots_required or "-",
+                       sort=lambda job, frame: frame.data.slots_required,
+                       tip="The number of slots the frame reserves on a slot-based\n"
+                           "host. '-' means the frame books cores and memory instead.")
+        self.addColumn("GPUs", 55, id=7,
                        data=lambda job, frame: (self.getGpus(frame, format_as_string=True) or ""),
                        sort=lambda job, frame: (self.getGpus(frame)),
                        tip="The number of gpus a frame is using")
-        self.addColumn("Host", 120, id=7,
+        self.addColumn("Host", 120, id=8,
                        data=lambda job, frame: frame.data.last_resource,
                        sort=lambda job, frame: frame.data.last_resource,
                        tip="The last or current resource that the frame used or is using.")
-        self.addColumn("Retries", 55, id=8,
+        self.addColumn("Retries", 55, id=9,
                        data=lambda job, frame: frame.data.retry_count,
                        sort=lambda job, frame: frame.data.retry_count,
                        tip="The number of times that each frame has had to retry.")
-        self.addColumn("_CheckpointEnabled", 20, id=9,
+        self.addColumn("_CheckpointEnabled", 20, id=10,
                        data=lambda job, frame: "",
                        sort=lambda job, frame: (
                                frame.data.checkpoint_state == opencue.api.job_pb2.ENABLED),
                        tip="A green check mark here indicates the frame has written out at least "
                            "1 checkpoint segment.")
-        self.addColumn("CheckP", 55, id=10,
+        self.addColumn("CheckP", 55, id=11,
                        data=lambda job, frame: frame.data.checkpoint_count,
                        sort=lambda job, frame: frame.data.checkpoint_count,
                        tip="The number of times a frame has been checkpointed.")
-        self.addColumn("Runtime", 70, id=11,
+        self.addColumn("Runtime", 70, id=12,
                        data=lambda job, frame: (cuegui.Utils.secondsToHMMSS(
                            frame.data.start_time and
                            frame.data.stop_time and
@@ -152,7 +157,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        tip="The amount of HOURS:MINUTES:SECONDS that the frame\n"
                            "has run for or last ran for.\n")
 
-        self.addColumn("LLU", 70, id=12,
+        self.addColumn("LLU", 70, id=13,
                        data=lambda job, frame: (frame.data.state == opencue.api.job_pb2.RUNNING and
                                                 self.frameLogDataBuffer.getLastLineData(
                                                     job, frame)[FrameLogDataBuffer.LLU] or ""),
@@ -164,7 +169,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "time without an update is an indication of a stuck\n"
                            "frame for most types of jobs")
 
-        self.addColumn("Memory (RSS)", 60, id=13,
+        self.addColumn("Memory (RSS)", 60, id=14,
                        data=lambda job, frame: (
                                frame.data.state == opencue.api.job_pb2.RUNNING and
                                cuegui.Utils.memoryToString(frame.data.used_memory) or
@@ -176,7 +181,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "If a frame is not running:\n"
                            "\t The most RSS memory this frame has used at one time.")
 
-        self.addColumn("Memory (PSS)", 60, id=14,
+        self.addColumn("Memory (PSS)", 60, id=15,
                        data=lambda job, frame: (
                                frame.data.state == opencue.api.job_pb2.RUNNING and
                                cuegui.Utils.memoryToString(frame.data.used_pss) or
@@ -188,7 +193,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "If a frame is not running:\n"
                            "\t The most PSS memory this frame has used at one time.")
 
-        self.addColumn("GPU Memory", 60, id=15,
+        self.addColumn("GPU Memory", 60, id=16,
                        data=lambda job, frame: (
                                frame.data.state == opencue.api.job_pb2.RUNNING and
                                cuegui.Utils.memoryToString(frame.data.used_gpu_memory) or
@@ -201,7 +206,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "If a frame is not running:\n"
                            "\t The most GPU memory this frame has used at one time.")
 
-        self.addColumn("Remain", 70, id=16,
+        self.addColumn("Remain", 70, id=17,
                        data=lambda job, frame: (frame.data.state == opencue.api.job_pb2.RUNNING and
                                                 self.frameEtaDataBuffer.getEtaFormatted(job, frame)
                                                 or ""),
@@ -209,17 +214,17 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                                                 self.frameEtaDataBuffer.getEta(job, frame) or -1),
                        tip="Hours:Minutes:Seconds remaining.")
 
-        self.addColumn("Start Time", 100, id=17,
+        self.addColumn("Start Time", 100, id=18,
                        data=lambda job, frame: (self.getTimeString(frame.data.start_time) or ""),
                        sort=lambda job, frame: (self.getTimeString(frame.data.start_time) or ""),
                        tip="The time the frame was started or retried.")
 
-        self.addColumn("Stop Time", 100, id=18,
+        self.addColumn("Stop Time", 100, id=19,
                        data=lambda job, frame: (self.getTimeString(frame.data.stop_time) or ""),
                        sort=lambda job, frame: (self.getTimeString(frame.data.stop_time) or ""),
                        tip="The time that the frame finished or died.")
 
-        self.addColumn("Eligible Time", 100, id=19,
+        self.addColumn("Eligible Time", 100, id=20,
                        data=lambda job, frame: (self.getTimeString(frame.data.eligible_time) or ""),
                        sort=lambda job, frame: frame.data.eligible_time,
                        tip="The time the frame became eligible to run - i.e. when it left\n"
@@ -228,7 +233,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "Time to see how long the frame waited to be picked up by a\n"
                            "render proc.")
 
-        self.addColumn("Submission Time", 100, id=20,
+        self.addColumn("Submission Time", 100, id=21,
                        data=lambda job, frame: (
                            self.getTimeString(frame.data.submission_time) or ""),
                        sort=lambda job, frame: frame.data.submission_time,
@@ -237,7 +242,7 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "the frame left DEPEND), this is always the job's submission\n"
                            "timestamp regardless of dependency state.")
 
-        self.addColumn("Last Line", 0, id=21,
+        self.addColumn("Last Line", 0, id=22,
                        data=lambda job, frame: (frame.data.state == opencue.api.job_pb2.RUNNING and
                                                 self.frameLogDataBuffer.getLastLineData(
                                                     job, frame)[FrameLogDataBuffer.LASTLINE] or ""),

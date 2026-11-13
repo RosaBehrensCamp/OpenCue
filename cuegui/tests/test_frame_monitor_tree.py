@@ -287,6 +287,31 @@ class FrameMonitorTreeTests(unittest.TestCase):
         self.assertEqual(125.82723, self.frameMonitorTree.getCores(frame))
         self.assertEqual('125.83', self.frameMonitorTree.getCores(frame, format_as_string=True))
 
+    def __headers(self):
+        header = self.frameMonitorTree.headerItem()
+        return [header.text(col) for col in range(self.frameMonitorTree.columnCount())]
+
+    def test_columnIndicesMatchHeaders(self):
+        headers = self.__headers()
+
+        self.assertEqual('Status', headers[cuegui.FrameMonitorTree.STATUS_COLUMN])
+        self.assertEqual('Host', headers[cuegui.FrameMonitorTree.PROC_COLUMN])
+        # _CheckpointEnabled has no header text; CheckP follows it.
+        self.assertEqual('', headers[cuegui.FrameMonitorTree.CHECKPOINT_COLUMN])
+        self.assertEqual('CheckP', headers[cuegui.FrameMonitorTree.CHECKPOINT_COLUMN + 1])
+        self.assertEqual('Runtime', headers[cuegui.FrameMonitorTree.RUNTIME_COLUMN])
+        self.assertEqual('Memory (RSS)', headers[cuegui.FrameMonitorTree.MEMORY_COLUMN])
+        self.assertEqual('Last Line', headers[cuegui.FrameMonitorTree.LASTLINE_COLUMN])
+
+    def test_slotsColumn(self):
+        slots_col = self.__headers().index('Slots')
+
+        for slots_required, shown in ((2, 2), (0, '-')):
+            frame = opencue.wrappers.frame.Frame(
+                opencue_proto.job_pb2.Frame(name='frame1', slots_required=slots_required))
+            item = cuegui.FrameMonitorTree.FrameWidgetItem(frame, self.frameMonitorTree, self.job)
+            self.assertEqual(shown, item.data(slots_col, qtpy.QtCore.Qt.DisplayRole))
+
     @mock.patch.object(cuegui.FrameMonitorTree.FrameContextMenu, 'exec_')
     def test_rightClickItem(self, execMock):
         mouse_position = qtpy.QtCore.QPoint()

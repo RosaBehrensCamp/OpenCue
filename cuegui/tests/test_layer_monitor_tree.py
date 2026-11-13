@@ -130,5 +130,29 @@ class LayerMonitorTreeMenuTests(unittest.TestCase):
         self.assertTrue(actions['Retry unsuccessful frames'].isEnabled())
 
 
+@mock.patch('opencue.cuebot.Cuebot.getStub', new=mock.Mock())
+class LayerMonitorTreeTests(unittest.TestCase):
+
+    @mock.patch('opencue.cuebot.Cuebot.getStub', new=mock.Mock())
+    def setUp(self):
+        app = test_utils.createApplication()
+        app.settings = qtpy.QtCore.QSettings()
+        cuegui.Style.init()
+        self.parentWidget = qtpy.QtWidgets.QWidget()
+        self.layerMonitorTree = cuegui.LayerMonitorTree.LayerMonitorTree(self.parentWidget)
+
+    def test_slotsColumn(self):
+        header = self.layerMonitorTree.headerItem()
+        headers = [header.text(col) for col in range(self.layerMonitorTree.columnCount())]
+        slots_col = headers.index('Slots')
+        self.assertEqual(headers.index('Cores') + 1, slots_col)
+
+        for slots_required, shown in ((2, 2), (0, '-')):
+            layer = opencue.wrappers.layer.Layer(
+                opencue_proto.job_pb2.Layer(name='layer1', slots_required=slots_required))
+            item = cuegui.LayerMonitorTree.LayerWidgetItem(layer, self.layerMonitorTree)
+            self.assertEqual(shown, item.data(slots_col, qtpy.QtCore.Qt.DisplayRole))
+
+
 if __name__ == '__main__':
     unittest.main()

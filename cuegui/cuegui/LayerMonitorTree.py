@@ -98,7 +98,13 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "will reserve as a minimum."
                            "Zero or negative value indicate that the layer will use\n"
                            "all available cores on the machine, minus this value.")
-        self.addColumn("Memory", 60, id=7,
+        self.addColumn("Slots", 45, id=7,
+                       data=lambda layer: layer.data.slots_required or "-",
+                       sort=lambda layer: layer.data.slots_required,
+                       tip="The number of slots each frame in this layer reserves\n"
+                           "on a slot-based host. '-' means the layer books\n"
+                           "cores and memory instead.")
+        self.addColumn("Memory", 60, id=8,
                        data=layerMemoryText,
                        sort=layerMemoryKb,
                        tip="The amount of memory that each frame in this layer\n"
@@ -107,19 +113,19 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "finished frames used; the layer's Minimum Memory is\n"
                            "in Layer Properties. Otherwise, if a frame begins to\n"
                            "use more memory than this, the cuebot increases it.")
-        self.addColumn("Gpus", 45, id=8,
+        self.addColumn("Gpus", 45, id=9,
                        data=lambda layer: "%d" % layer.data.min_gpus,
                        sort=lambda layer: layer.data.min_gpus,
                        tip="The number of gpus that the frames in this layer\n"
                            "will reserve as a minimum.")
-        self.addColumn("Gpu Memory", 40, id=9,
+        self.addColumn("Gpu Memory", 40, id=10,
                        data=lambda layer: cuegui.Utils.memoryToString(layer.data.min_gpu_memory),
                        sort=lambda layer: layer.data.min_gpu_memory,
                        tip="The amount of gpu memory each frame in this layer\n"
                            "will reserve for its use. Note that we may not have\n"
                            "machines as much gpu memory as you request.")
         self.addColumn(
-            "MaxRss", 60, id=10,
+            "MaxRss", 60, id=11,
             data=lambda layer: cuegui.Utils.memoryToString(layer.data.layer_stats.max_rss),
             sort=lambda layer: layer.data.layer_stats.max_rss,
             tip="Maximum amount of RSS memory used by any frame in\n"
@@ -127,7 +133,7 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         self.addColumn(
             "MaxPss",
             60,
-            id=11,
+            id=12,
             data=lambda layer: cuegui.Utils.memoryToString(
                 layer.data.layer_stats.max_pss
             ),
@@ -135,74 +141,74 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
             tip="Maximum amount of PSS memory used by any frame in\n"
                 "this layer at any time since the job was launched.",
             )
-        self.addColumn("Total", 40, id=12,
+        self.addColumn("Total", 40, id=13,
                        data=lambda layer: layer.data.layer_stats.total_frames,
                        sort=lambda layer: layer.data.layer_stats.total_frames,
                        tip="Total number of frames in this layer.")
-        self.addColumn("Done", 40, id=13,
+        self.addColumn("Done", 40, id=14,
                        data=lambda layer: layer.data.layer_stats.succeeded_frames,
                        sort=lambda layer: layer.data.layer_stats.succeeded_frames,
                        tip="Total number of done frames in this layer.")
-        self.addColumn("Run", 40, id=14,
+        self.addColumn("Run", 40, id=15,
                        data=lambda layer: layer.data.layer_stats.running_frames,
                        sort=lambda layer: layer.data.layer_stats.running_frames,
                        tip="Total number or running frames in this layer.")
-        self.addColumn("Depend", 53, id=15,
+        self.addColumn("Depend", 53, id=16,
                        data=lambda layer: layer.data.layer_stats.depend_frames,
                        sort=lambda layer: layer.data.layer_stats.depend_frames,
                        tip="Total number of dependent frames in this layer.")
-        self.addColumn("Wait", 40, id=16,
+        self.addColumn("Wait", 40, id=17,
                        data=lambda layer: layer.data.layer_stats.waiting_frames,
                        sort=lambda layer: layer.data.layer_stats.waiting_frames,
                        tip="Total number of waiting frames in this layer.")
-        self.addColumn("Eaten", 40, id=17,
+        self.addColumn("Eaten", 40, id=18,
                        data=lambda layer: layer.data.layer_stats.eaten_frames,
                        sort=lambda layer: layer.data.layer_stats.eaten_frames,
                        tip="Total number of eaten frames in this layer.")
-        self.addColumn("Dead", 40, id=18,
+        self.addColumn("Dead", 40, id=19,
                        data=lambda layer: layer.data.layer_stats.dead_frames,
                        sort=lambda layer: layer.data.layer_stats.dead_frames,
                        tip="Total number of dead frames in this layer.")
         self.addColumn(
-            "Avg", 65, id=19,
+            "Avg", 65, id=20,
             data=lambda layer: cuegui.Utils.secondsToHHMMSS(layer.data.layer_stats.avg_frame_sec),
             sort=lambda layer: layer.data.layer_stats.avg_frame_sec,
             tip="Average number of HOURS:MINUTES:SECONDS per frame\nin this layer.")
-        self.addColumn("Tags", 100, id=20,
+        self.addColumn("Tags", 100, id=21,
                        data=lambda layer: " | ".join(layer.data.tags),
                        tip="The tags define what resources may be booked on\n"
                            "frames in this layer.")
-        self.addColumn("Progress", 100, id=21,
+        self.addColumn("Progress", 100, id=22,
                         delegate=cuegui.ItemDelegate.ProgressDelegate,
                         data=lambda layer: layer.percentCompleted(),
                         sort=lambda layer: layer.percentCompleted(),
                         tip="Progress for the Layer")
-        self.addColumn("Timeout", 45, id=22,
+        self.addColumn("Timeout", 45, id=23,
                        data=lambda layer: cuegui.Utils.secondsToHHHMM(layer.data.timeout*60),
                        sort=lambda layer: layer.data.timeout,
                        tip="Timeout for the frames, Hours:Minutes")
-        self.addColumn("Timeout LLU", 45, id=23,
+        self.addColumn("Timeout LLU", 45, id=24,
                        data=lambda layer: cuegui.Utils.secondsToHHHMM(layer.data.timeout_llu*60),
                        sort=lambda layer: layer.data.timeout_llu,
                        tip="Timeout for a frames\' LLU, Hours:Minutes")
-        self.addColumn("Eligible", 100, id=24,
+        self.addColumn("Eligible", 100, id=25,
                        data=lambda layer: cuegui.Utils.dateToMMDDHHMM(layer.data.eligible_time),
                        sort=lambda layer: layer.data.eligible_time,
                        tip="The time the layer became eligible to run. Layers that were\n"
                            "never blocked by a dependency show the job's submission time.")
-        self.addColumn("Start Time", 100, id=25,
+        self.addColumn("Start Time", 100, id=26,
                        data=lambda layer: cuegui.Utils.dateToMMDDHHMM(layer.data.start_time),
                        sort=lambda layer: layer.data.start_time,
                        tip="The time the first frame of the layer began running.\n"
                            "Aggregated from the layer's frames; blank until the first\n"
                            "frame starts.")
-        self.addColumn("Stop Time", 100, id=26,
+        self.addColumn("Stop Time", 100, id=27,
                        data=lambda layer: cuegui.Utils.dateToMMDDHHMM(layer.data.stop_time),
                        sort=lambda layer: layer.data.stop_time,
                        tip="The time the last frame of the layer finished. Blank while\n"
                            "any frame is still pending, running, or in DEPEND - mirroring\n"
                            "the job's Stop Time semantics.")
-        self.addColumn("Start After", 100, id=27,
+        self.addColumn("Start After", 100, id=28,
                        data=lambda layer: (
                            cuegui.Utils.dateToMMDDHHMM(layer.data.start_after)
                            if layer.data.start_after else ""),

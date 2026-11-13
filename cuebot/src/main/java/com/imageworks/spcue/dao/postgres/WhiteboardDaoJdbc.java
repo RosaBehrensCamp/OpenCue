@@ -1232,6 +1232,7 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                     .setBookedMemory(rs.getLong("int_mem_booked"))
                     .setTimeout(rs.getInt("int_timeout"))
                     .setTimeoutLlu(rs.getInt("int_timeout_llu"))
+                    .setSlotsRequired(rs.getInt("int_slots_required"))
                     // layer.ts_eligible is NOT NULL by schema (defaults to layer creation time), so
                     // no submission-time fallback is needed.
                     .setEligibleTime(getEligibleTimeInEpoch(rs, null));
@@ -1396,7 +1397,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                     .setMaxPss(rs.getLong("int_pss_max_used"))
                     .setCheckpointState(
                             CheckpointState.valueOf(SqlUtil.getString(rs, "str_checkpoint_state")))
-                    .setCheckpointCount(rs.getInt("int_checkpoint_count"));
+                    .setCheckpointCount(rs.getInt("int_checkpoint_count"))
+                    .setSlotsRequired(rs.getInt("int_slots_required"));
 
             if (SqlUtil.getString(rs, "str_host") != null) {
                 builder.setLastResource(CueUtil.buildProcName(SqlUtil.getString(rs, "str_host"),
@@ -1599,6 +1601,7 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "frame.int_total_past_core_time,"
                 + "frame.int_total_past_gpu_time,"
                 + "layer.str_name AS layer_name,"
+                + "layer.int_slots_required,"
                 + "job.str_name AS job_name,"
                 + "job.ts_started AS job_ts_started,"
                 + "frame_state_display_overrides.* "
@@ -2331,6 +2334,7 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "frame.int_total_past_core_time,"
                 + "frame.int_total_past_gpu_time,"
                 + "layer.str_name AS layer_name,"
+                + "layer.int_slots_required,"
                 + "job.str_name AS job_name, "
                 + "job.ts_started AS job_ts_started, "
                 + "frame_state_display_overrides.*, "
