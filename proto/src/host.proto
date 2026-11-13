@@ -293,7 +293,8 @@ message Host {
     float gpus = 28;
     float idle_gpus = 29;
     // Max concurrent frames (slots) this host may run. -1 = regular host; >= 0 = slot-based.
-    int32 concurrent_slots_limit = 30;
+    // Unset when the Cuebot predates slot-based booking, so read it as -1.
+    optional int32 concurrent_slots_limit = 30;
     // Number of slots not currently reserved (concurrent_slots_limit minus the slots
     // reserved by running frames). Only computed for slot-based hosts
     // (concurrent_slots_limit > 0); -1 otherwise.

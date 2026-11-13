@@ -195,5 +195,32 @@ class HostWidgetItemTempBarDataTests(unittest.TestCase):
         self.assertNotIsInstance(delegate, cuegui.ItemDelegate.HostTempBarDelegate)
 
 
+@mock.patch('opencue.cuebot.Cuebot.getStub', new=mock.Mock())
+class HostSlotColumnsTests(unittest.TestCase):
+
+    def setUp(self):
+        app = test_utils.createApplication()
+        app.settings = qtpy.QtCore.QSettings()
+        cuegui.Style.init()
+        self.parentWidget = qtpy.QtWidgets.QWidget()
+        self.tree = cuegui.HostMonitorTree.HostMonitorTree(self.parentWidget)
+
+    def test_slotCells(self):
+        header = self.tree.headerItem()
+        headers = [header.text(col) for col in range(self.tree.columnCount())]
+        columns = (headers.index('Slots'), headers.index('Slots Idle'))
+
+        # None is a host from a Cuebot that predates slot-based booking, which
+        # doesn't send the limit: it shows as a regular host, not as a 0-slot host.
+        for limit, cells in ((-1, ['-', '-']), (0, [0, '-']), (4, [4, 3]), (None, ['-', '-'])):
+            data = opencue_proto.host_pb2.Host(id='host-id', name='host01', idle_slots=3)
+            if limit is not None:
+                data.concurrent_slots_limit = limit
+            item = cuegui.HostMonitorTree.HostWidgetItem(opencue.wrappers.host.Host(data),
+                                                         self.tree)
+            self.assertEqual(cells, [item.data(col, qtpy.QtCore.Qt.DisplayRole)
+                                     for col in columns], limit)
+
+
 if __name__ == '__main__':
     unittest.main()

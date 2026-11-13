@@ -72,6 +72,12 @@ def getEta(stats):
     return "-"
 
 
+def getMaxSlotsText(data):
+    """Gets the slot limit of a job or group for display, blank when unlimited."""
+    maxSlots = cuegui.Utils.getSlotLimit(data, "max_slots")
+    return maxSlots if maxSlots >= 0 else ""
+
+
 class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
     """Tree widget for displaying a show/job hierarchy."""
 
@@ -154,8 +160,8 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        tip="The maximum number of running gpus that the cuebot\n"
                            "will allow.")
         self.addColumn("Max Slots", 38, id=16,
-                       data=lambda job: job.data.max_slots if job.data.max_slots >= 0 else "",
-                       sort=lambda job: job.data.max_slots,
+                       data=lambda job: getMaxSlotsText(job.data),
+                       sort=lambda job: cuegui.Utils.getSlotLimit(job.data, "max_slots"),
                        tip="The maximum number of slots that the cuebot will allow\n"
                            "the job's slot-based layers to reserve. Blank means\n"
                            "unlimited.")
@@ -225,8 +231,7 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            data=lambda group: (
                                    group.data.max_gpus > 0 and group.data.max_gpus or ""))
             self.addColumn("", 0, id=16,
-                           data=lambda group: (
-                                   group.data.max_slots if group.data.max_slots >= 0 else ""))
+                           data=lambda group: getMaxSlotsText(group.data))
             self.addColumn("", 0, id=17)
             self.addColumn("", 0, id=18)
             self.addColumn("", 0, id=19)

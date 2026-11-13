@@ -336,7 +336,9 @@ class CueJobMonitorTreeTests(unittest.TestCase):
             opencue_proto.job_pb2.Job(
                 id='job1', name='job1', start_time=now, max_slots=-1,
                 job_stats=opencue_proto.job_pb2.JobStats(reserved_slots=2)),
-            opencue_proto.job_pb2.Job(id='job2', name='job2', start_time=now, max_slots=5),
+            opencue_proto.job_pb2.Job(id='job2', name='job2', start_time=now, max_slots=0),
+            # A Cuebot that predates slot-based booking sends no limit: not a 0 limit.
+            opencue_proto.job_pb2.Job(id='job3', name='job3', start_time=now),
             stats=opencue_proto.job_pb2.GroupStats(reserved_slots=2), max_slots=4)
         tree = self.cue_job_monitor_tree
         names = [info[cuegui.AbstractTreeWidget.COLUMN_NAME]
@@ -344,7 +346,8 @@ class CueJobMonitorTreeTests(unittest.TestCase):
         columns = (names.index('Slots'), names.index('Max Slots'))
         self.assertEqual((names.index('Gpus') + 1, names.index('Max Gpus') + 1), columns)
 
-        for itemId, cells in (('job1', ['2', '']), ('job2', ['0', 5]), ('g1', ['2', 4])):
+        for itemId, cells in (('job1', ['2', '']), ('job2', ['0', 0]), ('job3', ['0', '']),
+                              ('g1', ['2', 4]), ('root', ['0', ''])):
             item = tree._items[itemId]
             self.assertEqual(cells, [item.data(col, qtpy.QtCore.Qt.DisplayRole)
                                      for col in columns])

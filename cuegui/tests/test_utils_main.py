@@ -190,6 +190,12 @@ class UtilsViewerTests(unittest.TestCase):
             cuegui.Utils.countJobTypes([self._job(succeeded_frames=9, running_frames=1)])
             ['hasUnsuccessful'])
 
+    def test_shouldReadUnsentSlotLimitAsNoLimit(self):
+        # A Cuebot that predates slot-based booking doesn't send slot limits.
+        self.assertEqual(-1, cuegui.Utils.getSlotLimit(opencue_proto.job_pb2.Job(), 'max_slots'))
+        self.assertEqual(0, cuegui.Utils.getSlotLimit(
+            opencue_proto.job_pb2.Job(max_slots=0), 'max_slots'))
+
 
 if __name__ == '__main__':
     unittest.main()
