@@ -621,7 +621,8 @@ message Group {
     float min_gpus = 14;
     float max_gpus = 15;
     // Max concurrent slots for slot-based layers in this group (-1 unlimited, 0 reject-all).
-    int32 max_slots = 16;
+    // Unset when the Cuebot predates slot-based booking, so read it as -1.
+    optional int32 max_slots = 16;
 }
 
 message GroupSeq {
@@ -669,7 +670,8 @@ message Job {
     string loki_url = 23;
     int32 eligible_time = 24;
     // Max concurrent slots for slot-based layers in this job (-1 unlimited, 0 reject-all).
-    int32 max_slots = 25;
+    // Unset when the Cuebot predates slot-based booking, so read it as -1.
+    optional int32 max_slots = 25;
 }
 
 // Use to filter the job search.  Please note that by searching for non-pending jobs, the output is limited to 200 jobs
@@ -819,7 +821,8 @@ message NestedGroup {
     float max_gpus = 17;
     repeated Job inline_jobs = 18;
     // Max concurrent slots for slot-based layers in this group (-1 unlimited, 0 reject-all).
-    int32 max_slots = 19;
+    // Unset when the Cuebot predates slot-based booking, so read it as -1.
+    optional int32 max_slots = 19;
 }
 
 message NestedGroupSeq {

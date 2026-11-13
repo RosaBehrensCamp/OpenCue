@@ -2017,6 +2017,12 @@ class HostActions(AbstractActions):
         if hosts:
             self.app.view_procs.emit(hosts)
 
+    def canSetConcurrentSlotsLimit(self, rpcObjects=None):
+        """Returns True unless a selected host comes from a Cuebot that predates
+        slot-based booking, which has no call to set the limit."""
+        hosts = self._getOnlyHostObjects(rpcObjects)
+        return all(host.data.HasField("concurrent_slots_limit") for host in hosts)
+
     setConcurrentSlotsLimit_info = ["Update Slot Limit...", None, "configure"]
 
     def setConcurrentSlotsLimit(self, rpcObjects=None):
@@ -2025,8 +2031,9 @@ class HostActions(AbstractActions):
         if not hosts:
             return
 
-        # Current value from the first selected host (proto field, -1 when unset).
-        current = hosts[0].data.concurrent_slots_limit if len(hosts) == 1 else -1
+        # Current value from the first selected host.
+        current = (cuegui.Utils.getSlotLimit(hosts[0].data, "concurrent_slots_limit")
+                   if len(hosts) == 1 else -1)
 
         title = "Set Concurrent Slots Limit"
         body = "Enter the maximum concurrent slots for this host.\n" \

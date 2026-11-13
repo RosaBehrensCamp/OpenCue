@@ -48,7 +48,8 @@ message Subscription {
     int32 reserved_cores = 8;
     int32 reserved_gpus = 9;
     // Max concurrent slots for slot-based layers (-1 unlimited, 0 reject-all).
-    int32 max_slots = 10;
+    // Unset when the Cuebot predates slot-based booking, so read it as -1.
+    optional int32 max_slots = 10;
 }
 
 message SubscriptionSeq {

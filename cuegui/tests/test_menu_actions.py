@@ -1477,6 +1477,19 @@ class HostActionsTests(unittest.TestCase):
             self.host_actions.canTakeOwnership(
                 [opencue.wrappers.layer.Layer, unlocked_host]))
 
+    def test_canSetConcurrentSlotsLimit(self):
+        regular_host = opencue.wrappers.host.Host(
+            opencue_proto.host_pb2.Host(id='regular-id', concurrent_slots_limit=-1))
+        # A Cuebot that predates slot-based booking doesn't send the limit.
+        old_cuebot_host = opencue.wrappers.host.Host(
+            opencue_proto.host_pb2.Host(id='old-cuebot-id'))
+
+        self.assertTrue(
+            self.host_actions.canSetConcurrentSlotsLimit(
+                [opencue.wrappers.layer.Layer, regular_host]))
+        self.assertFalse(
+            self.host_actions.canSetConcurrentSlotsLimit([regular_host, old_cuebot_host]))
+
     @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
     @mock.patch('opencue.api.getOwner')
     @mock.patch('qtpy.QtWidgets.QInputDialog.getText')

@@ -471,6 +471,19 @@ def memoryToString(kmem, unit=None):
     return "%.01fG" % (float(kmem) / pow(k, 2))
 
 
+def getSlotLimit(data, field):
+    """Returns a slot limit of an rpc object: a host's concurrent_slots_limit, or a
+    max_slots. A Cuebot that predates slot-based booking doesn't send these, and
+    the limit then reads as -1 (a regular host, or no limit) instead of 0.
+    @type  data: protobuf message
+    @param data: The rpc object's data
+    @type  field: str
+    @param field: The name of the slot limit field
+    @rtype:  int
+    @return: The slot limit, or -1 if the Cuebot didn't send it"""
+    return getattr(data, field) if data.HasField(field) else -1
+
+
 def getResourceConfig():
     """Reads the given yaml file and returns the entries as a dictionary.
     If no config path is given, the default resources config will be read
