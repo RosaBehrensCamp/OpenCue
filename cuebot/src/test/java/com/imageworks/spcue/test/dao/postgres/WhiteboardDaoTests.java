@@ -67,6 +67,7 @@ import com.imageworks.spcue.dao.HostDao;
 import com.imageworks.spcue.dao.LayerDao;
 import com.imageworks.spcue.dao.LimitDao;
 import com.imageworks.spcue.dao.MatcherDao;
+import com.imageworks.spcue.dao.NestedWhiteboardDao;
 import com.imageworks.spcue.dao.PointDao;
 import com.imageworks.spcue.dao.ProcDao;
 import com.imageworks.spcue.dao.ShowDao;
@@ -102,6 +103,7 @@ import com.imageworks.spcue.grpc.job.FrameState;
 import com.imageworks.spcue.grpc.job.Job;
 import com.imageworks.spcue.grpc.job.JobSearchCriteria;
 import com.imageworks.spcue.grpc.job.Layer;
+import com.imageworks.spcue.grpc.job.NestedGroup;
 import com.imageworks.spcue.grpc.job.UpdatedFrameCheckResult;
 import com.imageworks.spcue.grpc.job.UpdatedFrame;
 import com.imageworks.spcue.grpc.job.UpdatedFrameSeq;
@@ -139,6 +141,9 @@ public class WhiteboardDaoTests extends AbstractTransactionalJUnit4SpringContext
 
     @Resource
     WhiteboardDao whiteboardDao;
+
+    @Resource
+    NestedWhiteboardDao nestedWhiteboardDao;
 
     @Resource
     ShowDao showDao;
@@ -973,6 +978,65 @@ public class WhiteboardDaoTests extends AbstractTransactionalJUnit4SpringContext
         assertEquals(2, whiteboardDao.findFrame(job.name, "pass_1", 1).getSlotsRequired());
         String frameId = frameDao.findFrame(job, "0001-pass_1").getFrameId();
         assertEquals(2, whiteboardDao.getFrame(frameId).getSlotsRequired());
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
+    public void testSlotsOnShowsJobsGroupsAndAllocations() {
+        AllocationEntity alloc =
+                allocationDao.getAllocationEntity("00000000-0000-0000-0000-000000000006");
+        DispatchHost hd = hostManager.createHost(getRenderHost(), alloc);
+        hostDao.updateConcurrentSlotsLimit(hd, 4);
+        hostDao.updateHostState(hd, HardwareState.UP);
+
+        JobDetail job = launchJob();
+        jdbcTemplate.update("UPDATE folder_resource SET int_max_slots = 5 WHERE pk_folder = ?",
+                job.groupId);
+        FrameDetail frame = frameDao.findFrameDetail(job, "0001-pass_1");
+        VirtualProc proc = new VirtualProc();
+        proc.allocationId = alloc.id;
+        proc.slotsReserved = 3;
+        proc.hostId = hd.id;
+        proc.hostName = hd.getName();
+        proc.jobId = job.id;
+        proc.frameId = frame.id;
+        proc.layerId = frame.layerId;
+        proc.showId = frame.showId;
+        procDao.insertVirtualProc(proc);
+
+        assertEquals(3, whiteboardDao.getShow(job.showId).getShowStats().getReservedSlots());
+        assertEquals(3, whiteboardDao.getJob(job.id).getJobStats().getReservedSlots());
+        assertEquals(3, whiteboardDao.getGroup(job.groupId).getGroupStats().getReservedSlots());
+        assertEquals(4, whiteboardDao.getAllocation(alloc.id).getStats().getSlots());
+        assertEquals(1, whiteboardDao.getAllocation(alloc.id).getStats().getAvailableSlots());
+
+        NestedGroup group =
+                findNestedGroup(nestedWhiteboardDao.getJobWhiteboard(getShow(), true), job.groupId);
+        assertEquals(3, group.getStats().getReservedSlots());
+        assertEquals(5, group.getMaxSlots());
+        for (Job inlineJob : group.getInlineJobsList()) {
+            assertEquals(inlineJob.getName(), inlineJob.getId().equals(job.id) ? 3 : 0,
+                    inlineJob.getJobStats().getReservedSlots());
+        }
+
+        // Only slot hosts that are up and open have idle slots.
+        hostDao.updateHostLock(hd, LockState.LOCKED, new Source("TEST"));
+        assertEquals(4, whiteboardDao.getAllocation(alloc.id).getStats().getSlots());
+        assertEquals(0, whiteboardDao.getAllocation(alloc.id).getStats().getAvailableSlots());
+    }
+
+    private NestedGroup findNestedGroup(NestedGroup group, String id) {
+        if (group.getId().equals(id)) {
+            return group;
+        }
+        for (NestedGroup child : group.getGroups().getNestedGroupsList()) {
+            NestedGroup found = findNestedGroup(child, id);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     @Test
