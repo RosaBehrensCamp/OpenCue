@@ -45,14 +45,24 @@ class LayerMonitorTreeTests(unittest.TestCase):
     def test_slotsColumn(self):
         header = self.layerMonitorTree.headerItem()
         headers = [header.text(col) for col in range(self.layerMonitorTree.columnCount())]
-        slots_col = headers.index('Slots')
-        self.assertEqual(headers.index('Cores') + 1, slots_col)
+        columns = (headers.index('Cores'), headers.index('Slots'))
+        self.assertEqual(columns[0] + 1, columns[1])
 
-        for slots_required, shown in ((2, 2), (0, '-')):
-            layer = opencue.wrappers.layer.Layer(
-                opencue_proto.job_pb2.Layer(name='layer1', slots_required=slots_required))
-            item = cuegui.LayerMonitorTree.LayerWidgetItem(layer, self.layerMonitorTree)
-            self.assertEqual(shown, item.data(slots_col, qtpy.QtCore.Qt.DisplayRole))
+        # A layer books either slots or cores; the other column shows '-'.
+        layers = {}
+        for name, slots_required, min_cores, cells in (
+                ('slot', 2, 1, ['-', 2]), ('cores', 0, 2, ['2.00', '-']),
+                ('all_cores', 0, -1, ['ALL (-1.00)', '-'])):
+            layer = opencue.wrappers.layer.Layer(opencue_proto.job_pb2.Layer(
+                name=name, slots_required=slots_required, min_cores=min_cores))
+            layers[name] = cuegui.LayerMonitorTree.LayerWidgetItem(layer, self.layerMonitorTree)
+            self.assertEqual(cells, [layers[name].data(col, qtpy.QtCore.Qt.DisplayRole)
+                                     for col in columns])
+
+        # Slot layers sort ahead of the layers that book cores, even ALL minus some.
+        self.layerMonitorTree.sortByColumn(columns[0], qtpy.QtCore.Qt.AscendingOrder)
+        self.assertLess(layers['slot'], layers['all_cores'])
+        self.assertLess(layers['all_cores'], layers['cores'])
 
 
 if __name__ == '__main__':

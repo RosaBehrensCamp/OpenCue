@@ -76,12 +76,17 @@ class LayerMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        data=lambda layer: displayRange(layer),
                        tip="The range of frames that the layer should render.")
         self.addColumn("Cores", 45, id=6,
-                       data=lambda layer: self.labelCoresColumn(layer.data.min_cores),
-                       sort=lambda layer: layer.data.min_cores,
+                       data=lambda layer: (
+                           "-" if layer.data.slots_required
+                           else self.labelCoresColumn(layer.data.min_cores)),
+                       # Slot layers sort together, ahead of the layers that book cores.
+                       sort=lambda layer: (
+                           float("-inf") if layer.data.slots_required else layer.data.min_cores),
                        tip="The number of cores that the frames in this layer\n"
                            "will reserve as a minimum."
                            "Zero or negative value indicate that the layer will use\n"
-                           "all available cores on the machine, minus this value.")
+                           "all available cores on the machine, minus this value.\n"
+                           "'-' means the layer books slots instead.")
         self.addColumn("Slots", 45, id=7,
                        data=lambda layer: layer.data.slots_required or "-",
                        sort=lambda layer: layer.data.slots_required,
