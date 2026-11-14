@@ -304,13 +304,17 @@ class FrameMonitorTreeTests(unittest.TestCase):
         self.assertEqual('Last Line', headers[cuegui.FrameMonitorTree.LASTLINE_COLUMN])
 
     def test_slotsColumn(self):
-        slots_col = self.__headers().index('Slots')
+        headers = self.__headers()
+        columns = (headers.index('Cores'), headers.index('Slots'))
 
-        for slots_required, shown in ((2, 2), (0, '-')):
-            frame = opencue.wrappers.frame.Frame(
-                opencue_proto.job_pb2.Frame(name='frame1', slots_required=slots_required))
+        # A frame books either slots or cores; the other column shows '-'.
+        for slots_required, last_resource, cells in (
+                (2, 'host1/0.00/0', ['-', 2]), (0, 'host1/2.00/0', ['2.00', '-'])):
+            frame = opencue.wrappers.frame.Frame(opencue_proto.job_pb2.Frame(
+                name='frame1', slots_required=slots_required, last_resource=last_resource))
             item = cuegui.FrameMonitorTree.FrameWidgetItem(frame, self.frameMonitorTree, self.job)
-            self.assertEqual(shown, item.data(slots_col, qtpy.QtCore.Qt.DisplayRole))
+            self.assertEqual(cells, [item.data(col, qtpy.QtCore.Qt.DisplayRole)
+                                     for col in columns])
 
     @mock.patch.object(cuegui.FrameMonitorTree.FrameContextMenu, 'exec_')
     def test_rightClickItem(self, execMock):

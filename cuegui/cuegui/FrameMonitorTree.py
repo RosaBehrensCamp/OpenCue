@@ -107,9 +107,12 @@ class FrameMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            "Depend: \t The frame depends on another frame or job.\n"
                            "Dead: \t The frame failed with an error.")
         self.addColumn("Cores", 55, id=5,
-                       data=lambda job, frame: (self.getCores(frame, format_as_string=True) or ""),
+                       data=lambda job, frame: (
+                           "-" if frame.data.slots_required
+                           else self.getCores(frame, format_as_string=True) or ""),
                        sort=lambda job, frame: (self.getCores(frame)),
-                       tip="The number of cores a frame is using")
+                       tip="The number of cores a frame is using.\n"
+                           "'-' means the frame books slots instead.")
         self.addColumn("Slots", 55, id=6,
                        data=lambda job, frame: frame.data.slots_required or "-",
                        sort=lambda job, frame: frame.data.slots_required,
