@@ -333,24 +333,41 @@ class CueJobMonitorTreeTests(unittest.TestCase):
     def test_slotCells(self):
         now = int(time.time())
         self._showJobs(
+            # Only slot layers.
             opencue_proto.job_pb2.Job(
                 id='job1', name='job1', start_time=now, max_slots=-1,
-                job_stats=opencue_proto.job_pb2.JobStats(reserved_slots=2)),
-            opencue_proto.job_pb2.Job(id='job2', name='job2', start_time=now, max_slots=0),
-            # A Cuebot that predates slot-based booking sends no limit: not a 0 limit.
-            opencue_proto.job_pb2.Job(id='job3', name='job3', start_time=now),
+                job_stats=opencue_proto.job_pb2.JobStats(
+                    reserved_slots=2, slot_layers=1, total_layers=1)),
+            # Slot and core layers.
+            opencue_proto.job_pb2.Job(
+                id='job2', name='job2', start_time=now, max_slots=0,
+                job_stats=opencue_proto.job_pb2.JobStats(
+                    reserved_cores=1.5, slot_layers=1, total_layers=2)),
+            # Only core layers. A Cuebot that predates slot-based booking sends
+            # no slot layers, and no limit: not a 0 limit.
+            opencue_proto.job_pb2.Job(
+                id='job3', name='job3', start_time=now,
+                job_stats=opencue_proto.job_pb2.JobStats(total_layers=1)),
             stats=opencue_proto.job_pb2.GroupStats(reserved_slots=2), max_slots=4)
         tree = self.cue_job_monitor_tree
         names = [info[cuegui.AbstractTreeWidget.COLUMN_NAME]
                  for info in tree.getColumnInfo(cuegui.Constants.TYPE_JOB)]
-        columns = (names.index('Slots'), names.index('Max Slots'))
-        self.assertEqual((names.index('Gpus') + 1, names.index('Max Gpus') + 1), columns)
+        columns = (names.index('Cores'), names.index('Slots'), names.index('Max Slots'))
+        self.assertEqual((names.index('Gpus') + 1, names.index('Max Gpus') + 1), columns[1:])
 
-        for itemId, cells in (('job1', ['2', '']), ('job2', ['0', 0]), ('job3', ['0', '']),
-                              ('g1', ['2', 4]), ('root', ['0', ''])):
+        for itemId, cells in (('job1', ['-', '2', '']), ('job2', ['1.50', '0', 0]),
+                              ('job3', ['0.00', '-', '']), ('g1', ['0.00', '2', 4]),
+                              ('root', ['0.00', '0', ''])):
             item = tree._items[itemId]
             self.assertEqual(cells, [item.data(col, qtpy.QtCore.Qt.DisplayRole)
                                      for col in columns])
+
+        # Jobs showing '-' sort below the ones that have reserved none.
+        items = [tree._items[itemId] for itemId in ('job1', 'job2', 'job3')]
+        for column, order in ((columns[0], ['job1', 'job3', 'job2']),
+                              (columns[1], ['job3', 'job2', 'job1'])):
+            tree.sortByColumn(column, qtpy.QtCore.Qt.AscendingOrder)
+            self.assertEqual(order, [item.rpcObject.data.id for item in sorted(items)])
 
     def test_bookingBarPaintsBakedData(self):
         self._showJobs(self._job(running_frames=3, waiting_frames=4, reserved_cores=3))

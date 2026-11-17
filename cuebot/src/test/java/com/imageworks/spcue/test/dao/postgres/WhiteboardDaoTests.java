@@ -102,6 +102,7 @@ import com.imageworks.spcue.grpc.job.FrameSearchCriteria;
 import com.imageworks.spcue.grpc.job.FrameState;
 import com.imageworks.spcue.grpc.job.Job;
 import com.imageworks.spcue.grpc.job.JobSearchCriteria;
+import com.imageworks.spcue.grpc.job.JobStats;
 import com.imageworks.spcue.grpc.job.Layer;
 import com.imageworks.spcue.grpc.job.NestedGroup;
 import com.imageworks.spcue.grpc.job.UpdatedFrameCheckResult;
@@ -978,6 +979,17 @@ public class WhiteboardDaoTests extends AbstractTransactionalJUnit4SpringContext
         assertEquals(2, whiteboardDao.findFrame(job.name, "pass_1", 1).getSlotsRequired());
         String frameId = frameDao.findFrame(job, "0001-pass_1").getFrameId();
         assertEquals(2, whiteboardDao.getFrame(frameId).getSlotsRequired());
+
+        // Of the job's two layers, only pass_1 books slots.
+        JobStats stats = whiteboardDao.getJob(job.id).getJobStats();
+        assertEquals(1, stats.getSlotLayers());
+        assertEquals(2, stats.getTotalLayers());
+        NestedGroup group =
+                findNestedGroup(nestedWhiteboardDao.getJobWhiteboard(getShow(), true), job.groupId);
+        for (Job inlineJob : group.getInlineJobsList()) {
+            assertEquals(inlineJob.getName(), inlineJob.getId().equals(job.id) ? 1 : 0,
+                    inlineJob.getJobStats().getSlotLayers());
+        }
     }
 
     @Test

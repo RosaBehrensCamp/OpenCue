@@ -1175,8 +1175,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 .setReservedCores(Convert.coreUnitsToCores(rs.getInt("int_cores")))
                 .setReservedGpus(rs.getInt("int_gpus"))
                 .setReservedSlots(rs.getInt("int_slots_reserved"))
-                .setMaxRss(rs.getLong("int_max_rss")).setMaxPss(rs.getLong("int_max_pss"))
-                .setTotalFrames(rs.getInt("int_frame_count"))
+                .setSlotLayers(rs.getInt("int_slot_layers")).setMaxRss(rs.getLong("int_max_rss"))
+                .setMaxPss(rs.getLong("int_max_pss")).setTotalFrames(rs.getInt("int_frame_count"))
                 .setTotalLayers(rs.getInt("int_layer_count"))
                 .setWaitingFrames(rs.getInt("int_waiting_count"))
                 .setRunningFrames(rs.getInt("int_running_count"))
@@ -1987,6 +1987,8 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
                 + "(job_resource.int_gpus + job_resource.int_local_gpus) AS int_gpus, "
                 + "COALESCE((SELECT SUM(proc.int_slots_reserved) FROM proc "
                     + "WHERE proc.pk_job = job.pk_job), 0) AS int_slots_reserved, "
+                + "(SELECT COUNT(*) FROM layer WHERE layer.pk_job = job.pk_job "
+                    + "AND layer.int_slots_required > 0) AS int_slot_layers, "
                 + "job.str_loki_url "
             + "FROM "
                 + "job,"
