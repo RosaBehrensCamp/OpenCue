@@ -78,6 +78,17 @@ def getMaxSlotsText(data):
     return maxSlots if maxSlots >= 0 else ""
 
 
+def booksCores(job):
+    """Whether any layer of a job books cores rather than slots."""
+    stats = job.data.job_stats
+    return not stats.slot_layers or stats.slot_layers < stats.total_layers
+
+
+def booksSlots(job):
+    """Whether any layer of a job books slots rather than cores."""
+    return job.data.job_stats.slot_layers > 0
+
+
 class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
     """Tree widget for displaying a show/job hierarchy."""
 
@@ -113,18 +124,28 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        data=lambda job: job.data.job_stats.running_frames,
                        sort=lambda job: job.data.job_stats.running_frames,
                        tip="The number of running frames.")
+        # A job whose layers all book slots shows '-' for cores, and one whose
+        # layers all book cores shows '-' for slots; both sort below zero.
         self.addColumn("Cores", 55, id=5,
-                       data=lambda job: "%.02f" % job.data.job_stats.reserved_cores,
-                       sort=lambda job: job.data.job_stats.reserved_cores,
-                       tip="The number of reserved cores.")
+                       data=lambda job: (
+                           "%.02f" % job.data.job_stats.reserved_cores
+                           if booksCores(job) else "-"),
+                       sort=lambda job: (
+                           job.data.job_stats.reserved_cores if booksCores(job) else -1),
+                       tip="The number of reserved cores.\n"
+                           "'-' means the job books slots instead.")
         self.addColumn("Gpus", 55, id=6,
                        data=lambda job: "%d" % job.data.job_stats.reserved_gpus,
                        sort=lambda job: job.data.job_stats.reserved_gpus,
                        tip="The number of reserved gpus.")
         self.addColumn("Slots", 45, id=7,
-                       data=lambda job: "%d" % job.data.job_stats.reserved_slots,
-                       sort=lambda job: job.data.job_stats.reserved_slots,
-                       tip="The number of slots reserved on slot-based hosts.")
+                       data=lambda job: (
+                           "%d" % job.data.job_stats.reserved_slots
+                           if booksSlots(job) else "-"),
+                       sort=lambda job: (
+                           job.data.job_stats.reserved_slots if booksSlots(job) else -1),
+                       tip="The number of slots reserved on slot-based hosts.\n"
+                           "'-' means the job books cores instead.")
         self.addColumn("Wait", 45, id=8,
                        data=lambda job: job.data.job_stats.waiting_frames,
                        sort=lambda job: job.data.job_stats.waiting_frames,

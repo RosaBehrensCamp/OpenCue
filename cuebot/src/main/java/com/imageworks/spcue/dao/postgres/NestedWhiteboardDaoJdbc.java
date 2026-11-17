@@ -151,6 +151,8 @@ public class NestedWhiteboardDaoJdbc extends JdbcDaoSupport implements NestedWhi
                 + "(job_resource.int_gpus + job_resource.int_local_gpus) AS int_gpus, "
                 + "COALESCE((SELECT SUM(proc.int_slots_reserved) FROM proc "
                     + "WHERE proc.pk_job = job.pk_job), 0) AS int_slots_reserved, "
+                + "(SELECT COUNT(*) FROM layer WHERE layer.pk_job = job.pk_job "
+                    + "AND layer.int_slots_required > 0) AS int_slot_layers, "
                 + "job_resource.int_min_cores, "
                 + "job_resource.int_min_gpus, "
                 + "job_resource.int_max_cores, "

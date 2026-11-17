@@ -718,6 +718,8 @@ message JobStats {
     int64 max_pss = 26;
     // Concurrency slots reserved by the job's running frames on slot hosts.
     int32 reserved_slots = 27;
+    // Layers of the job that book slots instead of cores (slots_required > 0).
+    int32 slot_layers = 28;
 }
 
 // LAYER ----
