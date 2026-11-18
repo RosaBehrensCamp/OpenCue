@@ -903,6 +903,38 @@ class FrameAttendantThreadTests(pyfakefs.fake_filesystem_unittest.TestCase):
             entrypoint=cmd_file
         )
 
+        ### Test slot-based frame: it ignores memory, so its container gets no limits
+        runFrame = opencue_proto.rqd_pb2.RunFrame(
+            frame_id=frameId,
+            job_name=jobName,
+            frame_name=frameName,
+            uid=frameUid,
+            user_name=frameUsername,
+            log_dir=logDir,
+            children=children,
+            environment={"ENVVAR": "env_value"},
+            os="centos7",
+            num_cores=0,
+            slots_required=1)
+        frameInfo = rqd.rqnetwork.RunningFrame(rqCore, runFrame)
+
+        # when
+        attendantThread = rqd.rqcore.FrameAttendantThread(rqCore, runFrame, frameInfo)
+        attendantThread.start()
+        attendantThread.join()
+
+        # then
+        cmd_file = os.path.join(tempDir, 'rqd-cmd-%s-%s' % (runFrame.frame_id, currentTime))
+        rqCore.docker_agent.runContainer.assert_called_with(
+            image_key="centos7",
+            environment=mock.ANY,
+            working_dir=jobTempPath,
+            hostname=mock.ANY,
+            mem_reservation=None,
+            mem_limit=None,
+            entrypoint=cmd_file
+        )
+
 
     # TODO(bcipriano) Re-enable this test once Windows is supported. The main sticking point here
     #   is that the log directory is always overridden on Windows which makes mocking difficult.

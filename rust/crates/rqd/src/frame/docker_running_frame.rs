@@ -322,9 +322,16 @@ impl RunningFrame {
                 .collect(),
         );
 
+        // Slot-based frames ignore memory: their container gets no memory limits.
         // Docker requires memory limits higer than 6MG
-        let soft_memory_limit = cmp::max(self.request.soft_memory_limit, 6291456) * 1000;
-        let hard_memory_limit = cmp::max(self.request.hard_memory_limit, 6291456) * 1000;
+        let (soft_memory_limit, hard_memory_limit) = if self.request.slots_required > 0 {
+            (None, None)
+        } else {
+            (
+                Some(cmp::max(self.request.soft_memory_limit, 6291456) * 1000),
+                Some(cmp::max(self.request.hard_memory_limit, 6291456) * 1000),
+            )
+        };
         HostConfig {
             devices: Some(vec![DeviceMapping {
                 path_on_host: Some("/dev/fuse".to_string()),
@@ -334,8 +341,8 @@ impl RunningFrame {
             auto_remove: Some(true),
             mounts,
             privileged: Some(true),
-            memory_reservation: Some(soft_memory_limit),
-            memory: Some(hard_memory_limit),
+            memory_reservation: soft_memory_limit,
+            memory: hard_memory_limit,
             ..Default::default()
         }
     }

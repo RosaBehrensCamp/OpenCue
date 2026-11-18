@@ -744,6 +744,9 @@ public class DispatchSupportService implements DispatchSupport {
         FrameSet chunkFrameSet = new FrameSet(frameSpec);
         int chunkEndFrame = chunkFrameSet.get(chunkFrameSet.size() - 1);
 
+        // A slot frame ignores memory: it reserves none, so RQD gets no limits to enforce.
+        boolean slotFrame = proc.slotsReserved > 0;
+
         RunFrame.Builder builder = RunFrame.newBuilder().setShot(frame.shot).setShow(frame.show)
                 .setUserName(frame.owner).setLogDir(frame.logDir).setJobId(frame.jobId)
                 .setJobName(frame.jobName).setFrameId(frame.id).setFrameName(frame.name)
@@ -751,8 +754,8 @@ public class DispatchSupportService implements DispatchSupport {
                 .setNumCores(proc.coresReserved).setNumGpus(proc.gpusReserved)
                 .setSlotsRequired(proc.slotsReserved).setStartTime(System.currentTimeMillis())
                 .setIgnoreNimby(proc.isLocalDispatch).setOs(proc.os)
-                .setSoftMemoryLimit(frame.softMemoryLimit).setLokiUrl(frame.lokiURL)
-                .setHardMemoryLimit(frame.hardMemoryLimit)
+                .setSoftMemoryLimit(slotFrame ? 0 : frame.softMemoryLimit).setLokiUrl(frame.lokiURL)
+                .setHardMemoryLimit(slotFrame ? 0 : frame.hardMemoryLimit)
                 .putAllEnvironment(jobDao.getEnvironment(frame))
                 .putAllEnvironment(layerDao.getLayerEnvironment(frame)).putEnvironment("CUE3", "1")
                 .putEnvironment("CUE_THREADS", String.valueOf(threads))
