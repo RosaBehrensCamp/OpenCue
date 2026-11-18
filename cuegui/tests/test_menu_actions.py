@@ -1445,6 +1445,56 @@ class HostActionsTests(unittest.TestCase):
         self.assertFalse(
             self.host_actions.canSetConcurrentSlotsLimit([regular_host, old_cuebot_host]))
 
+    @staticmethod
+    def _slotLimitHost(name, limit, runningFrames):
+        host = opencue.wrappers.host.Host(
+            opencue_proto.host_pb2.Host(id=name + '-id', name=name, concurrent_slots_limit=limit))
+        host.getProcs = mock.Mock(return_value=[mock.Mock()] * runningFrames)
+        host.setConcurrentSlotsLimit = mock.Mock()
+        return host
+
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=False)
+    @mock.patch('qtpy.QtWidgets.QInputDialog.getInt', return_value=(4, True))
+    def test_setConcurrentSlotsLimitWarnsBeforeSwitchingARunningHost(
+            self, getIntMock, questionBoxMock):
+        busy_host = self._slotLimitHost('busy-host', -1, 2)
+        idle_host = self._slotLimitHost('idle-host', -1, 0)
+
+        self.host_actions.setConcurrentSlotsLimit(rpcObjects=[busy_host, idle_host])
+
+        questionBoxMock.assert_called_once_with(
+            self.widgetMock, 'Hosts Are Running Frames', mock.ANY,
+            ['busy-host (2 running frames)'])
+        busy_host.setConcurrentSlotsLimit.assert_not_called()
+        idle_host.setConcurrentSlotsLimit.assert_not_called()
+
+    @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
+    @mock.patch('qtpy.QtWidgets.QInputDialog.getInt', return_value=(-1, True))
+    def test_setConcurrentSlotsLimitAppliesOnceTheWarningIsConfirmed(
+            self, getIntMock, questionBoxMock):
+        busy_host = self._slotLimitHost('busy-host', 4, 3)
+        idle_host = self._slotLimitHost('idle-host', 0, 0)
+
+        self.host_actions.setConcurrentSlotsLimit(rpcObjects=[busy_host, idle_host])
+
+        questionBoxMock.assert_called_once_with(
+            self.widgetMock, 'Hosts Are Running Frames', mock.ANY,
+            ['busy-host (3 running frames)'])
+        busy_host.setConcurrentSlotsLimit.assert_called_once_with(-1)
+        idle_host.setConcurrentSlotsLimit.assert_called_once_with(-1)
+
+    @mock.patch('cuegui.Utils.questionBoxYesNo')
+    @mock.patch('qtpy.QtWidgets.QInputDialog.getInt', return_value=(8, True))
+    def test_setConcurrentSlotsLimitDoesNotWarnWhenTheModeStays(
+            self, getIntMock, questionBoxMock):
+        slot_host = self._slotLimitHost('slot-host', 4, 3)
+
+        self.host_actions.setConcurrentSlotsLimit(rpcObjects=[slot_host])
+
+        slot_host.getProcs.assert_not_called()
+        questionBoxMock.assert_not_called()
+        slot_host.setConcurrentSlotsLimit.assert_called_once_with(8)
+
     @mock.patch('cuegui.Utils.questionBoxYesNo', return_value=True)
     @mock.patch('opencue.api.getOwner')
     @mock.patch('qtpy.QtWidgets.QInputDialog.getText')
