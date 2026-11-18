@@ -156,6 +156,13 @@ public class MaestroSlotDbTests extends AbstractTransactionalJUnit4SpringContext
                         Integer.class, host.id));
         assertEquals(2, snapshot(host.id).slotsIdle);
 
+        // The next candidate read counts them against the job and its folder.
+        for (Maestro.CandidateRow row : maestroDao.getCandidateRows(true))
+            if (row.row.layerId.equals(layer.getLayerId()))
+                candidate = row.row;
+        assertEquals(2, candidate.jobSlotsInUse);
+        assertEquals(2, candidate.folderSlotsInUse);
+
         // RQD is told the frame's slots, no cores and no memory limits, though the layer asks
         // for memory.
         FrameBooking booking = won.get(0);
