@@ -716,7 +716,9 @@ view; this is how Maestro plans it.
   layers. There is no slot counter to drift or repair.
 - **Commit.** `planHost` builds a slot proc with `VirtualProc.buildSlot`
   (0 cores, 0 memory, the frame's slots), the proc insert writes
-  `int_slots_reserved`, and RQD receives `slots_required`.
+  `int_slots_reserved`, and RQD receives `slots_required` with soft and hard
+  memory limits of 0, so it neither caps the frame's memory nor picks it as a
+  memory aggressor.
 - **The host slot cap is guarded at commit, like host cores.** Right after the
   guarded host update has locked each host row, `startFramesAndProcsBatch`
   reads each slot host's free slots from the procs it holds now and keeps only

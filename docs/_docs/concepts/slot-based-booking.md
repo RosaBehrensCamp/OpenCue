@@ -20,6 +20,11 @@ A slot-based frame ignores cores and memory entirely: it reserves **0 cores and 
 memory** and runs unpinned on the host. The only thing that limits it is a **slot
 budget**.
 
+Cuebot also launches a slot frame with no memory limits, even if its layer asks for
+memory. RQD doesn't cap its memory, in a container or otherwise, and never kills it
+for using more memory than it asked for. Set a slot host's limit so that the frames
+it runs at once fit in its memory.
+
 > **Note:** Slot-based booking is implemented in [OpenCue Maestro](/docs/developer-guide/maestro/)
 > and only works for shows Maestro schedules. The legacy dispatcher never books a slot
 > layer and never books anything onto a slot host.

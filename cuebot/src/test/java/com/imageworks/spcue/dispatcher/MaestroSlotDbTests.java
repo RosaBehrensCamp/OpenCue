@@ -156,11 +156,15 @@ public class MaestroSlotDbTests extends AbstractTransactionalJUnit4SpringContext
                         Integer.class, host.id));
         assertEquals(2, snapshot(host.id).slotsIdle);
 
-        // RQD is told the frame's slots and no cores.
+        // RQD is told the frame's slots, no cores and no memory limits, though the layer asks
+        // for memory.
         FrameBooking booking = won.get(0);
+        assertTrue(booking.frame.softMemoryLimit > 0);
         RunFrame runFrame = dispatchSupport.prepareRqdRunFrame(booking.proc, booking.frame);
         assertEquals(1, runFrame.getSlotsRequired());
         assertEquals(0, runFrame.getNumCores());
+        assertEquals(0, runFrame.getSoftMemoryLimit());
+        assertEquals(0, runFrame.getHardMemoryLimit());
     }
 
     /** The slot layer's next waiting frames, planned onto the test host without a slot check. */
