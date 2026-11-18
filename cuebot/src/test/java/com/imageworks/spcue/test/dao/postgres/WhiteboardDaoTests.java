@@ -1299,6 +1299,41 @@ public class WhiteboardDaoTests extends AbstractTransactionalJUnit4SpringContext
     @Test
     @Transactional
     @Rollback(true)
+    public void getHostsByOwnerCountsIdleSlots() {
+        AllocationEntity alloc =
+                allocationDao.getAllocationEntity("00000000-0000-0000-0000-000000000006");
+        DispatchHost hd = hostManager.createHost(getRenderHost(), alloc);
+        hostDao.updateConcurrentSlotsLimit(hd, 4);
+
+        JobDetail job = launchJob();
+        FrameDetail frame = frameDao.findFrameDetail(job, "0001-pass_1");
+        VirtualProc proc = new VirtualProc();
+        proc.allocationId = alloc.id;
+        proc.slotsReserved = 3;
+        proc.hostId = hd.id;
+        proc.hostName = hd.getName();
+        proc.jobId = job.id;
+        proc.frameId = frame.id;
+        proc.layerId = frame.layerId;
+        proc.showId = frame.showId;
+        procDao.insertVirtualProc(proc);
+
+        OwnerEntity owner = ownerManager.createOwner("spongebob", showDao.findShowDetail("pipe"));
+        ownerManager.takeOwnership(owner, hd);
+        // A second owner and deed, so slots summed over every owner and deed row would count
+        // the proc's slots more than once.
+        DispatchHost other =
+                hostManager.createHost(getRenderHost().toBuilder().setName("other_host").build());
+        ownerManager.takeOwnership(
+                ownerManager.createOwner("squidward", showDao.findShowDetail("pipe")), other);
+
+        assertEquals(1, whiteboardDao.getHosts(owner).getHostsCount());
+        assertEquals(1, whiteboardDao.getHosts(owner).getHosts(0).getIdleSlots());
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
     public void getOwnerFromDeed() {
 
         RenderHost host = getRenderHost();

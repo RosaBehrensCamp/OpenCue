@@ -680,15 +680,11 @@ public class WhiteboardDaoJdbc extends JdbcDaoSupport implements WhiteboardDao {
 
     @Override
     public HostSeq getHosts(OwnerEntity owner) {
-        StringBuilder sb = new StringBuilder(4096);
-        String query = GET_HOST;
-        query = query.replace("FROM ", "FROM owner, deed,");
-        sb.append(query);
-        sb.append("AND deed.pk_host = host.pk_host ");
-        sb.append("AND deed.pk_owner = owner.pk_owner ");
-        sb.append("AND owner.pk_owner = ?");
-
-        List<Host> hosts = getJdbcTemplate().query(sb.toString(), HOST_MAPPER, owner.getId());
+        // Filter with a subquery, not by joining owner and deed into GET_HOST's FROM: rewriting
+        // the query text would also hit the FROM of the subqueries in its select list.
+        List<Host> hosts = getJdbcTemplate().query(
+                GET_HOST + " AND host.pk_host IN (SELECT pk_host FROM deed WHERE pk_owner = ?)",
+                HOST_MAPPER, owner.getId());
         return HostSeq.newBuilder().addAllHosts(hosts).build();
     }
 
