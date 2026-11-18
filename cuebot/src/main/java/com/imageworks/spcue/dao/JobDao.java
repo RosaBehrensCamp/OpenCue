@@ -47,14 +47,6 @@ public interface JobDao {
     public void updateMaxCores(GroupInterface g, int cores);
 
     /**
-     * Updates all jobs in the specified group to the max slots value.
-     *
-     * @param g
-     * @param slots
-     */
-    public void updateMaxSlots(GroupInterface g, int slots);
-
-    /**
      * Updates all jobs in the specifid group to the min cores value.
      *
      * @param g
