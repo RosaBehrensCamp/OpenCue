@@ -413,6 +413,11 @@ The serializer gates features based on `spec_version` from the config:
 | `maxcores`, `maxgpus` | 1.13 |
 | `outputs` | 1.15 |
 
+`slots_required` works the other way: a job with a slot layer declares spec version
+1.16 whatever the configured version, and every other job keeps the configured
+version. A Cuebot without slot-based booking has no 1.16 DTD, so this keeps regular
+jobs launching on it.
+
 ## QC Integration
 
 The `--qc` flag adds a Quality Control layer via `bin/util_qc_job_layer.py`.

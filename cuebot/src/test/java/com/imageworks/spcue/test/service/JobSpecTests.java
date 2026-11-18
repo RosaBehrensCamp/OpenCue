@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.List;
 import javax.annotation.Resource;
 
 import org.junit.Test;
@@ -29,6 +30,7 @@ import org.springframework.test.context.junit4.AbstractTransactionalJUnit4Spring
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
 
 import com.imageworks.spcue.BuildableJob;
+import com.imageworks.spcue.BuildableLayer;
 import com.imageworks.spcue.LayerDetail;
 import com.imageworks.spcue.SpecBuilderException;
 import com.imageworks.spcue.config.TestAppConfig;
@@ -124,6 +126,43 @@ public class JobSpecTests extends AbstractTransactionalJUnit4SpringContextTests 
         BuildableJob job = spec.getJobs().get(0);
         assertEquals(job.maxCoresOverride, Integer.valueOf(420));
         assertEquals(job.maxGpusOverride, Integer.valueOf(42));
+    }
+
+    @Test
+    public void testParseSlotsRequired() {
+        String xml = readJobSpec("jobspec_1_16.xml");
+        JobSpec spec = jobLauncher.parse(xml);
+        assertEquals(spec.getDoc().getDocType().getSystemID(),
+                "http://localhost:8080/spcue/dtd/cjsl-1.16.dtd");
+        List<BuildableLayer> layers = spec.getJobs().get(0).getBuildableLayers();
+        assertEquals(2, layers.get(0).layerDetail.slotsRequired);
+        // A layer without slots_required books cores.
+        assertEquals(0, layers.get(1).layerDetail.slotsRequired);
+    }
+
+    @Test
+    public void testParseSlotsRequiredOutOfOrder() {
+        // cjsl-1.16 places slots_required right after chunk: anywhere else fails the DTD.
+        String xml =
+                readJobSpec("jobspec_1_16.xml").replace("<slots_required>2</slots_required>", "")
+                        .replace("<timeout_llu>600</timeout_llu>",
+                                "<timeout_llu>600</timeout_llu><slots_required>2</slots_required>");
+        try {
+            jobLauncher.parse(xml);
+            fail("Expected exception");
+        } catch (SpecBuilderException e) {
+            assertTrue(e.getMessage().startsWith("Failed to parse job spec XML"));
+            assertTrue(e.getMessage().contains("\"layer\""));
+        }
+    }
+
+    @Test
+    public void testParseSpecBeforeSlotsBooksCores() {
+        // A spec older than cjsl-1.16 cannot set slots_required, so every layer books cores.
+        JobSpec spec = jobLauncher.parse(readJobSpec("jobspec_1_13.xml"));
+        for (BuildableLayer layer : spec.getJobs().get(0).getBuildableLayers()) {
+            assertEquals(0, layer.layerDetail.slotsRequired);
+        }
     }
 
     private int parseMaxRetries(String maxRetriesElement) {

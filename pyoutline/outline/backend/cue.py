@@ -236,6 +236,13 @@ def _serialize(launcher, use_pycuerun):
     ol = launcher.get_outline()
 
     spec_version = Version(outline.config.get("outline", "spec_version"))
+    # Slot layers need cjsl-1.16, which a Cuebot without slot-based booking doesn't
+    # have. Only a job with one declares it, so every other job keeps the configured
+    # version and launches on any Cuebot.
+    if spec_version < Version("1.16") and any(
+            layer.get_arg("slots_required") for layer in ol.get_layers()
+            if layer.get_arg("register") and not layer.get_parent()):
+        spec_version = Version("1.16")
 
     root = Et.Element("spec")
     depends = Et.Element("depends")
@@ -325,6 +332,9 @@ def _serialize(launcher, use_pycuerun):
                 sub_element(spec_layer, "cmd", " ".join(cmd))
         sub_element(spec_layer, "range", str(frame_range))
         sub_element(spec_layer, "chunk", str(layer.get_chunk_size()))
+        # cjsl-1.16 places slots_required right after chunk.
+        if layer.get_arg("slots_required"):
+            sub_element(spec_layer, "slots_required", "%s" % (layer.get_arg("slots_required")))
 
         # opencue specific options
         # Keeping 'threads' for backward compatibility
@@ -383,13 +393,6 @@ def _serialize(launcher, use_pycuerun):
                 sub_element(spec_layer, "timeout_llu", "%s" % (layer.get_arg("timeout_llu")))
             else:
                 _warning_spec_version(spec_version, "timeout_llu")
-
-        if layer.get_arg("slots_required"):
-            if spec_version >= Version("1.16"):
-                sub_element(
-                    spec_layer, "slots_required", "%s" % (layer.get_arg("slots_required")))
-            else:
-                _warning_spec_version(spec_version, "slots_required")
 
         if os.environ.get("OL_TAG_OVERRIDE", False):
             sub_element(spec_layer, "tags",

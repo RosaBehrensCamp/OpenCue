@@ -62,8 +62,10 @@ unaffected by the cores/GPUs limits.
 
 ## Making a layer slot-based
 
-Set `slots_required` on the layer in the job spec (spec version **1.16**+). With
-PyOutline:
+Set `slots_required` on the layer in the job spec (spec version **1.16**+). PyOutline
+declares 1.16 by itself for a job with a slot layer and keeps the configured version
+for every other job, so regular jobs still launch on a Cuebot without slot-based
+booking. With PyOutline:
 
 ```python
 layer = outline.modules.shell.Shell(

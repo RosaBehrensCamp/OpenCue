@@ -103,3 +103,30 @@ class SpecVersiondTest(unittest.TestCase):
         root = self._makeMaxCoresGpusSpec()
         self.assertEqual(root.find("job/maxcores").text, "8")
         self.assertEqual(root.find("job/maxgpus").text, "7")
+
+    def _makeSlotSpec(self, slots_required):
+        outline.Outline.current = None
+        ol = outline.Outline(name="spec_version_test")
+        layer = outline.modules.shell.Shell("test_layer", command=["/bin/ls"])
+        layer.set_arg("timeout", 420)
+        if slots_required:
+            layer.set_arg("slots_required", slots_required)
+        ol.add_layer(layer)
+        l = outline.cuerun.OutlineLauncher(ol)
+        return l.serialize()
+
+    def test_slots_required_declares_1_16(self):
+        outline.config.set("outline", "spec_version", "1.15")
+        spec = self._makeSlotSpec(2)
+        self.assertIn("cjsl-1.16.dtd", spec)
+        layer = Et.fromstring(spec).find("job/layers/layer")
+        self.assertEqual(layer.find("slots_required").text, "2")
+        # cjsl-1.16 places slots_required right after chunk.
+        tags = [child.tag for child in layer]
+        self.assertEqual(tags[tags.index("chunk") + 1], "slots_required")
+
+    def test_no_slots_required_keeps_the_configured_version(self):
+        outline.config.set("outline", "spec_version", "1.15")
+        spec = self._makeSlotSpec(0)
+        self.assertIn("cjsl-1.15.dtd", spec)
+        self.assertIsNone(Et.fromstring(spec).find("job/layers/layer/slots_required"))
