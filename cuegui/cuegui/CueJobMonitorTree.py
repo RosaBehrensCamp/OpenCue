@@ -72,12 +72,6 @@ def getEta(stats):
     return "-"
 
 
-def getMaxSlotsText(data):
-    """Gets the slot limit of a job or group for display, blank when unlimited."""
-    maxSlots = cuegui.Utils.getSlotLimit(data, "max_slots")
-    return maxSlots if maxSlots >= 0 else ""
-
-
 def booksCores(job):
     """Whether any layer of a job books cores rather than slots."""
     stats = job.data.job_stats
@@ -181,7 +175,7 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                        tip="The maximum number of running gpus that the cuebot\n"
                            "will allow.")
         self.addColumn("Max Slots", 38, id=16,
-                       data=lambda job: getMaxSlotsText(job.data),
+                       data=lambda job: cuegui.Utils.getMaxSlotsText(job.data),
                        sort=lambda job: cuegui.Utils.getSlotLimit(job.data, "max_slots"),
                        tip="The maximum number of slots that the cuebot will allow\n"
                            "the job's slot-based layers to reserve. Blank means\n"
@@ -252,7 +246,7 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
                            data=lambda group: (
                                    group.data.max_gpus > 0 and group.data.max_gpus or ""))
             self.addColumn("", 0, id=16,
-                           data=lambda group: getMaxSlotsText(group.data))
+                           data=lambda group: cuegui.Utils.getMaxSlotsText(group.data))
             self.addColumn("", 0, id=17)
             self.addColumn("", 0, id=18)
             self.addColumn("", 0, id=19)
@@ -758,6 +752,8 @@ class CueJobMonitorTree(cuegui.AbstractTreeWidget.AbstractTreeWidget):
             menu.addSeparator()
             self.__menuActions.jobs().addAction(menu, "setMinCores")
             self.__menuActions.jobs().addAction(menu, "setMaxCores")
+            self.__menuActions.jobs().addAction(menu, "setMaxSlots").setEnabled(
+                self.__menuActions.jobs().canSetMaxSlots(selectedObjects))
             self.__menuActions.jobs().addAction(menu, "setMinGpus")
             self.__menuActions.jobs().addAction(menu, "setMaxGpus")
             self.__menuActions.jobs().addAction(menu, "setPriority")

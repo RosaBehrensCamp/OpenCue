@@ -409,6 +409,29 @@ class JobActions(AbstractActions):
                 self._runAction("Set maximum cores", jobs,
                                 lambda job: job.setMaxCores(float(value)))
 
+    def canSetMaxSlots(self, rpcObjects=None):
+        """Returns True unless a selected job comes from a Cuebot that predates
+        slot-based booking, which has no call to set the limit."""
+        jobs = self._getOnlyJobObjects(rpcObjects)
+        return all(job.data.HasField("max_slots") for job in jobs)
+
+    setMaxSlots_info = ["Set Maximum Slots...", "Set Job(s) Maximum Slots", "configure"]
+
+    def setMaxSlots(self, rpcObjects=None):
+        jobs = self._getOnlyJobObjects(rpcObjects)
+        if jobs:
+            current = max([cuegui.Utils.getSlotLimit(job.data, "max_slots") for job in jobs])
+            title = "Set Maximum Slots"
+            body = "Please enter the new maximum slots value for the slot-based layers:\n" \
+                   "-1 = unlimited, 0 = reject all slot work"
+            (value, choice) = QtWidgets.QInputDialog.getInt(self._caller,
+                                                            title, body,
+                                                            current,
+                                                            -1, cuegui.Constants.QT_MAX_INT, 1)
+            if choice:
+                self._runAction("Set maximum slots", jobs,
+                                lambda job: job.setMaxSlots(int(value)))
+
     setMinGpus_info = ["Set Minimum Gpus...", "Set Job(s) Minimum Gpus", "configure"]
     def setMinGpus(self, rpcObjects=None):
         jobs = self._getOnlyJobObjects(rpcObjects)
@@ -1899,6 +1922,27 @@ class SubscriptionActions(AbstractActions):
             if choice:
                 self._runAction("Set subscription burst", subs,
                                 lambda sub: sub.setBurst(int(value*100.0)))
+
+    def canEditMaxSlots(self, rpcObjects=None):
+        """Returns True unless a selected subscription comes from a Cuebot that
+        predates slot-based booking, which has no call to set the limit."""
+        subs = self._getSelected(rpcObjects)
+        return all(sub.data.HasField("max_slots") for sub in subs)
+
+    editMaxSlots_info = ["Edit Subscription Max Slots...", None, "configure"]
+    def editMaxSlots(self, rpcObjects=None):
+        subs = self._getSelected(rpcObjects)
+        if subs:
+            current = max([cuegui.Utils.getSlotLimit(sub.data, "max_slots") for sub in subs])
+            title = "Edit Subscription Max Slots"
+            body = "Please enter the maximum number of slots that this " \
+                   "subscription's slot-based layers should be allowed to reserve:\n" \
+                   "-1 = unlimited, 0 = reject all slot work"
+            (value, choice) = QtWidgets.QInputDialog.getInt(
+                self._caller, title, body, current, -1, cuegui.Constants.QT_MAX_INT, 1)
+            if choice:
+                self._runAction("Set subscription max slots", subs,
+                                lambda sub: sub.setMaxSlots(int(value)))
 
     delete_info = ["Delete Subscription", None, "configure"]
     def delete(self, rpcObjects=None):

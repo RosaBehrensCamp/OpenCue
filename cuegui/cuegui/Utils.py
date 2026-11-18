@@ -484,6 +484,13 @@ def getSlotLimit(data, field):
     return getattr(data, field) if data.HasField(field) else -1
 
 
+def getMaxSlotsText(data):
+    """Gets the max_slots of a job, group or subscription for display, blank when
+    unlimited."""
+    maxSlots = getSlotLimit(data, "max_slots")
+    return maxSlots if maxSlots >= 0 else ""
+
+
 def getResourceConfig():
     """Reads the given yaml file and returns the entries as a dictionary.
     If no config path is given, the default resources config will be read

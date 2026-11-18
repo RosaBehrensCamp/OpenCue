@@ -223,6 +223,8 @@ class SubGraphTreeWidget(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         menu = QtWidgets.QMenu()
         self.__menuActions.subscriptions().addAction(menu, "editSize")
         self.__menuActions.subscriptions().addAction(menu, "editBurst")
+        self.__menuActions.subscriptions().addAction(menu, "editMaxSlots").setEnabled(
+            self.__menuActions.subscriptions().canEditMaxSlots())
         menu.addSeparator()
         self.__menuActions.subscriptions().addAction(menu, "delete")
         menu.addSeparator()

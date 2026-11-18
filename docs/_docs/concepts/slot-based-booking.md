@@ -88,9 +88,17 @@ non-threadable.
 
 - **Host slot cap** — set a host's concurrent slots limit from CueCommander, or via
   PyCue: `host.setConcurrentSlotsLimit(8)` (`-1` disables slot mode).
-- **Subscription / folder / job max slots** — set from the GUI or via PyCue
-  (`subscription.setMaxSlots(...)`, `group.setMaxSlots(...)`, `job.setMaxSlots(...)`),
-  mirroring how `max_cores` is managed.
+- **Subscription / folder / job max slots** — set from CueGUI next to the matching
+  core limits, or via PyCue (`subscription.setMaxSlots(...)`, `group.setMaxSlots(...)`,
+  `job.setMaxSlots(...)`), mirroring how `max_cores` is managed:
+  - **Job:** right-click the job in Monitor Cue, then **Set Maximum Slots...**
+  - **Folder:** **Group Maximum Slots** in the group's properties dialog. Leave it
+    unchecked for no limit.
+  - **Subscription:** right-click the subscription, then **Edit Subscription Max
+    Slots...**. The subscriptions list shows the limit in its **Max Slots** column.
+
+  These options are disabled or hidden when CueGUI is connected to a Cuebot without
+  slot-based booking.
 
 ## Upgrading RQD before you make a host slot-based
 

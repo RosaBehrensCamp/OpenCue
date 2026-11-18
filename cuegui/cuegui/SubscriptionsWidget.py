@@ -222,6 +222,11 @@ class SubscriptionsTreeWidget(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         self.addColumn("Used", 70, id=5,
                        data=lambda sub: ("%.2f" % (sub.data.reserved_cores/100.0)),
                        sort=lambda sub: (sub.data.reserved_cores/100.0))
+        self.addColumn("Max Slots", 70, id=6,
+                       data=lambda sub: cuegui.Utils.getMaxSlotsText(sub.data),
+                       sort=lambda sub: cuegui.Utils.getSlotLimit(sub.data, "max_slots"),
+                       tip="The maximum number of slots that the subscription's\n"
+                           "slot-based layers may reserve. Blank means unlimited.")
 
         # Set before AbstractTreeWidget.__init__, which requests the first
         # update.
@@ -289,6 +294,8 @@ class SubscriptionsTreeWidget(cuegui.AbstractTreeWidget.AbstractTreeWidget):
         menu = QtWidgets.QMenu()
         self.__menuActions.subscriptions().addAction(menu, "editSize")
         self.__menuActions.subscriptions().addAction(menu, "editBurst")
+        self.__menuActions.subscriptions().addAction(menu, "editMaxSlots").setEnabled(
+            self.__menuActions.subscriptions().canEditMaxSlots())
         menu.addSeparator()
         self.__menuActions.subscriptions().addAction(menu, "delete")
         menu.exec_(QtCore.QPoint(e.globalX(),e.globalY())) # pylint: disable=no-member
