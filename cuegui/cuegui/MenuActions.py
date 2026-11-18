@@ -2054,6 +2054,18 @@ class HostActions(AbstractActions):
         )
 
         if choice:
+            busy = self._hostsRunningFramesOnSlotModeChange(hosts, int(value))
+            if busy and not cuegui.Utils.questionBoxYesNo(
+                    self._caller,
+                    "Hosts Are Running Frames",
+                    "These hosts are running frames. Switching a host between slot-based "
+                    "and regular booking doesn't stop its frames, and the new kind of work "
+                    "is booked without counting them, which can overload the host.\n\n"
+                    "To avoid this, lock the hosts, wait for their frames to finish, "
+                    "change the limit, then unlock them.\n\n"
+                    "Change the limit anyway?",
+                    busy):
+                return
             for host in hosts:
                 self.cuebotCall(
                     host.setConcurrentSlotsLimit,
@@ -2061,6 +2073,21 @@ class HostActions(AbstractActions):
                     int(value),
                 )
             self._update()
+
+    def _hostsRunningFramesOnSlotModeChange(self, hosts, limit):
+        """Returns the hosts that a new concurrent slots limit switches between slot-based
+        and regular booking while they run frames, each as its name and frame count.
+        A slot frame reserves no cores, so only the host's procs show what it runs."""
+        busy = []
+        for host in hosts:
+            isSlotHost = cuegui.Utils.getSlotLimit(host.data, "concurrent_slots_limit") >= 0
+            if isSlotHost == (limit >= 0):
+                continue
+            procs = self.cuebotCall(
+                host.getProcs, "Get Running Frames on %s Failed" % host.data.name)
+            if procs:
+                busy.append("%s (%d running frames)" % (host.data.name, len(procs)))
+        return busy
 
     lock_info = ["Lock Host", None, "lock"]
 
