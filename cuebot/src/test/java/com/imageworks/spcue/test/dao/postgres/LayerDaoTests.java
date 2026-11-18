@@ -16,6 +16,10 @@
 package com.imageworks.spcue.test.dao.postgres;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -193,6 +197,23 @@ public class LayerDaoTests extends AbstractTransactionalJUnit4SpringContextTests
         assertNotNull(layer.id);
         assertNotNull(layer.jobId);
         assertEquals(layer.showId, ROOT_SHOW);
+    }
+
+    @Test
+    @Transactional
+    @Rollback(true)
+    public void testInsertLayerDetailSlotsRequired() throws IOException {
+        // Launched like a submitted spec, so the cjsl-1.16 DTD resolves.
+        jobLauncher.launch(new String(
+                Files.readAllBytes(Paths.get("src/test/resources/conf/jobspec/jobspec_1_16.xml")),
+                StandardCharsets.UTF_8));
+        JobDetail job = jobDao.findJobDetail("pipe-dev.cue-testuser_slots");
+        String slotsRequired = "SELECT int_slots_required FROM layer WHERE pk_layer=?";
+
+        assertEquals(Integer.valueOf(2), jdbcTemplate.queryForObject(slotsRequired, Integer.class,
+                layerDao.findLayerDetail(job, "slot_layer").getLayerId()));
+        assertEquals(Integer.valueOf(0), jdbcTemplate.queryForObject(slotsRequired, Integer.class,
+                layerDao.findLayerDetail(job, "core_layer").getLayerId()));
     }
 
     @Test
