@@ -74,11 +74,11 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             + "  h.str_tags, "
             + "  hs.str_os, "
             // Slot hosts only: the cap and the slots their procs hold. Summed per slot host
-            // (i_proc_pkhost), so regular hosts cost nothing.
+            // over its slot procs alone (i_proc_slots_pkhost), so regular hosts cost nothing.
             + "  h.int_concurrent_slots_limit, "
             + "  CASE WHEN h.int_concurrent_slots_limit >= 0 THEN "
             + "    (SELECT COALESCE(SUM(p.int_slots_reserved), 0) FROM proc p "
-            + "      WHERE p.pk_host = h.pk_host) "
+            + "      WHERE p.pk_host = h.pk_host AND p.int_slots_reserved > 0) "
             + "  ELSE 0 END AS slots_in_use "
             + "FROM host h, host_stat hs, alloc a "
             + "WHERE h.pk_host = hs.pk_host "
@@ -144,19 +144,13 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             + "  COALESCE(fr.int_max_cores, -1) AS folder_max, "
             + "  COALESCE(fr.int_cores, 0)      AS folder_running, "
             // Slot layers: slots per frame, and the job and folder slot caps (-1 =
-            // unlimited, 0 = reject all) with the slots their procs hold, summed only
-            // for slot layers.
+            // unlimited, 0 = reject all) with the slots their procs hold (see the js
+            // and fs joins).
             + "  l.int_slots_required, "
             + "  jr.int_max_slots AS job_max_slots, "
             + "  COALESCE(fr.int_max_slots, -1) AS folder_max_slots, "
-            + "  CASE WHEN l.int_slots_required > 0 THEN "
-            + "    (SELECT COALESCE(SUM(p.int_slots_reserved), 0) FROM proc p "
-            + "      WHERE p.pk_job = j.pk_job) "
-            + "  ELSE 0 END AS job_slots_in_use, "
-            + "  CASE WHEN l.int_slots_required > 0 THEN "
-            + "    (SELECT COALESCE(SUM(p.int_slots_reserved), 0) FROM proc p "
-            + "      JOIN job fj ON fj.pk_job = p.pk_job WHERE fj.pk_folder = j.pk_folder) "
-            + "  ELSE 0 END AS folder_slots_in_use "
+            + "  COALESCE(js.slots, 0) AS job_slots_in_use, "
+            + "  COALESCE(fs.slots, 0) AS folder_slots_in_use "
             + "FROM   layer l "
             + "JOIN   job j           ON j.pk_job  = l.pk_job "
             + "JOIN   job_resource jr ON jr.pk_job = j.pk_job "
@@ -173,6 +167,15 @@ public class MaestroDaoJdbc extends JdbcDaoSupport implements MaestroDao {
             // wider), so a count built from running frames x int_cores_min undercounts
             // a folder and lets the plan carry it past a cap the commit then rejects.
             + "LEFT JOIN folder_resource fr ON fr.pk_folder = j.pk_folder "
+            // The slots each job's and each folder's procs hold, summed once per read
+            // over the slot procs alone (i_proc_slots_pkjob) rather than once per row.
+            + "LEFT JOIN (SELECT p.pk_job, SUM(p.int_slots_reserved) AS slots FROM proc p "
+            + "      WHERE p.int_slots_reserved > 0 GROUP BY p.pk_job) js "
+            + "  ON js.pk_job = j.pk_job "
+            + "LEFT JOIN (SELECT sj.pk_folder, SUM(p.int_slots_reserved) AS slots FROM proc p "
+            + "      JOIN job sj ON sj.pk_job = p.pk_job "
+            + "      WHERE p.int_slots_reserved > 0 GROUP BY sj.pk_folder) fs "
+            + "  ON fs.pk_folder = j.pk_folder "
             + "WHERE  j.str_state = 'PENDING' "
             + "  AND  j.b_paused  = false "
             // Slot layers reserve no cores: only max_slots binds them, in Maestro.

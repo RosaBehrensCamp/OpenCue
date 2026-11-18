@@ -295,7 +295,8 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
         }
         String in = String.join(",", Collections.nCopies(hostIds.size(), "?"));
         getJdbcTemplate().query("SELECT h.pk_host, h.int_concurrent_slots_limit - COALESCE(("
-                + "SELECT SUM(p.int_slots_reserved) FROM proc p WHERE p.pk_host = h.pk_host"
+                + "SELECT SUM(p.int_slots_reserved) FROM proc p WHERE p.pk_host = h.pk_host "
+                + "AND p.int_slots_reserved > 0"
                 + "), 0) AS free FROM host h WHERE h.int_concurrent_slots_limit >= 0 "
                 + "AND h.pk_host IN (" + in + ")", rs -> {
                     free.put(rs.getString("pk_host"), rs.getInt("free"));

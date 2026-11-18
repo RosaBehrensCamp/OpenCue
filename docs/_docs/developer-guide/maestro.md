@@ -712,8 +712,10 @@ view; this is how Maestro plans it.
   caps (`jobSlotsUsed`, `folderSlotsUsed`, `showSlotsUsed`). A blocked slot layer
   waits as `limit` (a slot cap) or `capacity` (every slot host is full).
 - **Usage is read, not kept.** The host snapshot, candidate read and
-  subscription read each sum `proc.int_slots_reserved`, only for slot hosts and
-  layers. There is no slot counter to drift or repair.
+  subscription read each sum `proc.int_slots_reserved`, over the slot procs
+  alone: every sum filters on `int_slots_reserved > 0`, which the partial
+  indexes from V57 serve, and the candidate read sums per job and per folder
+  once, not once per row. There is no slot counter to drift or repair.
 - **Commit.** `planHost` builds a slot proc with `VirtualProc.buildSlot`
   (0 cores, 0 memory, the frame's slots), the proc insert writes
   `int_slots_reserved`, and RQD receives `slots_required` with soft and hard
