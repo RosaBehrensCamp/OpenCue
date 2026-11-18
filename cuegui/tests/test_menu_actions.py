@@ -178,6 +178,42 @@ class JobActionsTests(unittest.TestCase):
         job2.setMaxCores.assert_not_called()
 
     @mock.patch('qtpy.QtWidgets.QInputDialog.getInt')
+    def test_setMaxSlots(self, getIntMock):
+        job1 = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(max_slots=-1))
+        job1.setMaxSlots = mock.Mock()
+        job2 = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(max_slots=6))
+        job2.setMaxSlots = mock.Mock()
+        getIntMock.return_value = (0, True)
+
+        self.job_actions.setMaxSlots(rpcObjects=[job1, job2])
+
+        # Default value should be the highest slot limit of all jobs passed, and -1
+        # (unlimited) the lowest value accepted.
+        getIntMock.assert_called_with(
+            self.widgetMock, mock.ANY, mock.ANY, 6, -1, mock.ANY, mock.ANY)
+        # 0 is a limit of its own: it rejects all slot work.
+        job1.setMaxSlots.assert_called_with(0)
+        job2.setMaxSlots.assert_called_with(0)
+
+    @mock.patch('qtpy.QtWidgets.QInputDialog.getInt')
+    def test_setMaxSlotsCanceled(self, getIntMock):
+        job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(max_slots=6))
+        job.setMaxSlots = mock.Mock()
+        getIntMock.return_value = (None, False)
+
+        self.job_actions.setMaxSlots(rpcObjects=[job])
+
+        job.setMaxSlots.assert_not_called()
+
+    def test_canSetMaxSlots(self):
+        job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(max_slots=-1))
+        # A Cuebot that predates slot-based booking doesn't send the limit.
+        old_cuebot_job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job())
+
+        self.assertTrue(self.job_actions.canSetMaxSlots([job]))
+        self.assertFalse(self.job_actions.canSetMaxSlots([job, old_cuebot_job]))
+
+    @mock.patch('qtpy.QtWidgets.QInputDialog.getInt')
     def test_setPriority(self, getIntMock):
         job = opencue.wrappers.job.Job(opencue_proto.job_pb2.Job(priority=0))
         job.setPriority = mock.Mock()
@@ -1351,6 +1387,29 @@ class SubscriptionActionsTests(unittest.TestCase):
         self.subscription_actions.editBurst(rpcObjects=[sub])
 
         sub.setBurst.assert_called_with(newSize*100.0)
+
+    @mock.patch('qtpy.QtWidgets.QInputDialog.getInt')
+    def test_editMaxSlots(self, getIntMock):
+        sub = opencue.wrappers.subscription.Subscription(
+            opencue_proto.subscription_pb2.Subscription(max_slots=12))
+        sub.setMaxSlots = mock.MagicMock()
+        getIntMock.return_value = (-1, True)
+
+        self.subscription_actions.editMaxSlots(rpcObjects=[sub])
+
+        getIntMock.assert_called_with(
+            self.widgetMock, mock.ANY, mock.ANY, 12, -1, mock.ANY, mock.ANY)
+        sub.setMaxSlots.assert_called_with(-1)
+
+    def test_canEditMaxSlots(self):
+        sub = opencue.wrappers.subscription.Subscription(
+            opencue_proto.subscription_pb2.Subscription(max_slots=-1))
+        # A Cuebot that predates slot-based booking doesn't send the limit.
+        old_cuebot_sub = opencue.wrappers.subscription.Subscription(
+            opencue_proto.subscription_pb2.Subscription())
+
+        self.assertTrue(self.subscription_actions.canEditMaxSlots([sub]))
+        self.assertFalse(self.subscription_actions.canEditMaxSlots([sub, old_cuebot_sub]))
 
     @mock.patch('cuegui.Utils.questionBoxYesNo', new=mock.Mock(return_value=True))
     def test_delete(self):

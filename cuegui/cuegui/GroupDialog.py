@@ -54,6 +54,7 @@ class GroupDialog(QtWidgets.QDialog):
         __defaultJobMaxCores = defaults["defaultJobMaxCores"]
         __minCores = defaults["minCores"]
         __maxCores = defaults["maxCores"]
+        __maxSlots = defaults["maxSlots"]
 
         __defaultJobMinGpus = defaults["defaultJobMinGpus"]
         __defaultJobMaxGpus = defaults["defaultJobMaxGpus"]
@@ -93,26 +94,37 @@ class GroupDialog(QtWidgets.QDialog):
             self.__createToggleDoubleSpinBox("Group Maximum Cores", 7,
                                              __modify and __maxCores != -1.0,
                                              __maxCores, 1)
+        # None when the Cuebot predates slot-based booking: it has no group slot limit.
+        # Unchecked means unlimited (-1); 0 is a limit of its own, rejecting all slot work.
+        self._maxSlotsCheck = None
+        if __maxSlots is not None:
+            (self._maxSlotsCheck, self._maxSlotsValue) = \
+                self.__createToggleSpinBox("Group Maximum Slots", 8,
+                                           __modify and __maxSlots != -1,
+                                           __maxSlots if __maxSlots >= 0 else 1)
+            self._maxSlotsValue.setToolTip(
+                "The maximum number of slots the group's slot-based layers may reserve.\n"
+                "0 rejects all slot work. Leave unchecked for no limit.")
 
         (self._defaultJobMinGpusCheck, self._defaultJobMinGpusValue) = \
-            self.__createToggleSpinBox("Job Default Minimum Gpus", 8,
+            self.__createToggleSpinBox("Job Default Minimum Gpus", 9,
                                              __modify and __defaultJobMinGpus != -1,
                                              __defaultJobMinGpus, 1)
         (self._defaultJobMaxGpusCheck, self._defaultJobMaxGpusValue) = \
-            self.__createToggleSpinBox("Job Default Maximum Gpus", 9,
+            self.__createToggleSpinBox("Job Default Maximum Gpus", 10,
                                              __modify and __defaultJobMaxGpus != -1,
                                              __defaultJobMaxGpus, 1)
         (self._minGpusCheck, self._minGpusValue) = \
-            self.__createToggleSpinBox("Group Minimum Gpus", 10,
+            self.__createToggleSpinBox("Group Minimum Gpus", 11,
                                              __modify and __minGpus != 0,
                                              __minGpus)
         (self._maxGpusCheck, self._maxGpusValue) = \
-            self.__createToggleSpinBox("Group Maximum Gpus", 11,
+            self.__createToggleSpinBox("Group Maximum Gpus", 12,
                                              __modify and __maxGpus != -1,
                                              __maxGpus, 1)
 
         self.__createButtons(
-            QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel, 12, 3)
+            QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel, 13, 3)
 
     def __createToggleDoubleSpinBox(
             self, text, row, startEnabled = False, currentValue = 0, minValue = 0):
@@ -195,6 +207,12 @@ class GroupDialog(QtWidgets.QDialog):
                         float(self._maxCoresValue.value()),
                         __group.data.max_cores, float(-1))
 
+        if self._maxSlotsCheck is not None:
+            self.__setValue(self._maxSlotsCheck,
+                            __group.setMaxSlots,
+                            int(self._maxSlotsValue.value()),
+                            __group.data.max_slots, -1)
+
         self.__setValue(self._defaultJobMinGpusCheck,
                         __group.setDefaultJobMinGpus,
                         float(self._defaultJobMinGpusValue.value()),
@@ -242,6 +260,8 @@ class ModifyGroupDialog(GroupDialog):
             "defaultJobMaxCores": modifyGroup.data.default_job_max_cores,
             "minCores": modifyGroup.data.min_cores,
             "maxCores": modifyGroup.data.max_cores,
+            "maxSlots": (modifyGroup.data.max_slots
+                         if modifyGroup.data.HasField("max_slots") else None),
             "defaultJobMinGpus": modifyGroup.data.default_job_min_gpus,
             "defaultJobMaxGpus": modifyGroup.data.default_job_max_gpus,
             "minGpus": modifyGroup.data.min_gpus,
@@ -263,6 +283,8 @@ class NewGroupDialog(GroupDialog):
             "defaultJobMaxCores": 1.0,
             "minCores": 0.0,
             "maxCores": 1.0,
+            # Only a Cuebot with slot-based booking sends a group's slot limit.
+            "maxSlots": -1 if parentGroup.data.HasField("max_slots") else None,
             "defaultJobMinGpus": 0,
             "defaultJobMaxGpus": 0,
             "minGpus": 0,

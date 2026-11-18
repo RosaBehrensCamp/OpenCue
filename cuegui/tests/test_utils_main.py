@@ -21,6 +21,7 @@ import unittest
 import mock
 
 import opencue_proto.job_pb2
+import opencue_proto.subscription_pb2
 import opencue.wrappers.job
 import opencue.wrappers.layer
 import cuegui.Utils
@@ -195,6 +196,14 @@ class UtilsViewerTests(unittest.TestCase):
         self.assertEqual(-1, cuegui.Utils.getSlotLimit(opencue_proto.job_pb2.Job(), 'max_slots'))
         self.assertEqual(0, cuegui.Utils.getSlotLimit(
             opencue_proto.job_pb2.Job(max_slots=0), 'max_slots'))
+
+    def test_shouldShowUnlimitedMaxSlotsBlank(self):
+        self.assertEqual('', cuegui.Utils.getMaxSlotsText(opencue_proto.job_pb2.Job(max_slots=-1)))
+        self.assertEqual('', cuegui.Utils.getMaxSlotsText(opencue_proto.job_pb2.Job()))
+        # 0 is a limit of its own: it rejects all slot work.
+        self.assertEqual(0, cuegui.Utils.getMaxSlotsText(opencue_proto.job_pb2.Job(max_slots=0)))
+        self.assertEqual(8, cuegui.Utils.getMaxSlotsText(
+            opencue_proto.subscription_pb2.Subscription(max_slots=8)))
 
 
 if __name__ == '__main__':
