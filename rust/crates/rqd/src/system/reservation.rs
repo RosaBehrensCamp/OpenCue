@@ -163,11 +163,14 @@ impl CoreStateManager {
         if num_reserved_cores != num_cores {
             Err(ReservationError::NotEnoughResourcesAvailable)?
         }
-        for (phys_id, core_id, _thread_id) in selected_threads.clone() {
-            self.bookings
-                .entry(resource_id)
-                .or_insert(CoreBooking::new())
-                .insert((phys_id, core_id));
+        // Record the booking even when it holds no cores (a slot frame reserves 0), so
+        // releasing it when the frame ends finds it.
+        let booking = self
+            .bookings
+            .entry(resource_id)
+            .or_insert(CoreBooking::new());
+        for (phys_id, core_id, _thread_id) in selected_threads.iter() {
+            booking.insert((*phys_id, *core_id));
         }
 
         Ok(selected_threads
@@ -543,6 +546,26 @@ mod tests {
         let resource_id3 = Uuid::new_v4();
         let result3 = manager.reserve_cores(1, resource_id3);
         assert!(result3.is_err());
+    }
+
+    #[test]
+    fn test_reserve_zero_cores_is_released_without_error() {
+        let processor_structure = create_test_processor_structure();
+        let mut manager = CoreStateManager::new(processor_structure);
+        let resource_id = Uuid::new_v4();
+
+        // A slot frame reserves 0 cores: no threads, and nothing taken from the host
+        let thread_ids = manager.reserve_cores(0, resource_id).unwrap();
+        assert!(thread_ids.is_empty());
+        assert!(manager.bookings[&resource_id].cores.is_empty());
+        let report = manager.get_core_info_report(1);
+        assert_eq!(report.booked_cores, 0);
+        assert_eq!(report.idle_cores, report.total_cores);
+
+        // Releasing it when the frame ends finds the booking
+        let released = manager.release_cores(&resource_id).unwrap();
+        assert!(released.is_empty());
+        assert!(!manager.bookings.contains_key(&resource_id));
     }
 
     #[test]
