@@ -52,6 +52,75 @@ To apply a migration:
 
 1.  Restart Cuebot.
 
+## Building large indexes ahead of time
+
+Some migrations add indexes to tables that can be large on a busy farm. Flyway
+runs each migration in a transaction, and PostgreSQL can't build an index with
+`CREATE INDEX CONCURRENTLY` inside a transaction, so these migrations use a
+plain `CREATE INDEX`. A plain build scans the whole table and blocks writes to
+it until it finishes. Cuebot is stopped while you migrate, so nothing is
+blocked, but each build adds its scan to the downtime.
+
+To keep the downtime short on a large database, build these indexes yourself
+with `CREATE INDEX CONCURRENTLY` while Cuebot is still running. A concurrent
+build doesn't block writes. These migrations create their indexes with
+`IF NOT EXISTS`, so when Flyway runs them afterwards, it skips the indexes you
+built.
+
+| Migration | Indexes | Tables |
+|---|---|---|
+| V44 | `idx_layer_tags_array`, `idx_job_pending_lookup`, `idx_layer_stat_waiting` | `layer`, `job`, `layer_stat` |
+| V50 | `i_frame_layer_dispatch_waiting` | `frame` |
+| V57 | `i_proc_slots_pkjob`, `i_proc_slots_pkshow`, `i_proc_slots_pkhost`, `i_layer_slots_pkjob` | `proc`, `layer` |
+
+To build an index ahead of time:
+
+1.  Copy its `CREATE INDEX` statement from the migration file in
+    `cuebot/src/main/resources/conf/ddl/postgres/migrations` and add
+    `CONCURRENTLY` after `INDEX`. Keep the name and the rest of the definition
+    exactly as they are. For example, for one of V57's indexes:
+
+    ```sql
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS i_proc_slots_pkjob
+        ON proc (pk_job) WHERE int_slots_reserved > 0;
+    ```
+
+1.  Run each statement on its own in `psql`, not inside a transaction block:
+    PostgreSQL rejects a concurrent build after `BEGIN`.
+
+1.  Check that every build finished. A concurrent build that fails or is
+    canceled leaves an invalid index behind under the same name, and the
+    migration's `IF NOT EXISTS` would then skip it. This query lists invalid
+    indexes:
+
+    ```sql
+    SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;
+    ```
+
+    Drop each one it lists with `DROP INDEX CONCURRENTLY <name>`, then build it
+    again.
+
+1.  Apply the migrations as described in
+    [Applying a migration](#applying-a-migration).
+
+### V57 and slot-based booking
+
+V57's indexes cover columns that V53 and V55 add, so you can't build them
+before those migrations have run. When you upgrade from a version before V53,
+build them between two Flyway runs instead:
+
+1.  Stop Cuebot and apply the migrations up to V56 by adding `-target=56` to the
+    `flyway` command.
+
+1.  Update and start Cuebot. It works without V57's indexes; until they exist,
+    its slot usage queries are just slower.
+
+1.  Build V57's indexes concurrently, as described above.
+
+1.  Run the `flyway` command again, without `-target`. V57's indexes already
+    exist, so it only records V57 and finishes in a moment, and you can run it
+    with Cuebot running.
+
 ## What's next?
 
 *   To stay up to date on changes that might require database migrations,

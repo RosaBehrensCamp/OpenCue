@@ -8,10 +8,12 @@
 --
 -- The indexes hold only slot procs and slot layers, so they are small, but building
 -- each still scans its whole table and blocks writes to it meanwhile. On a large
--- production database, build them out-of-band first with CREATE INDEX CONCURRENTLY
--- (not allowed inside Flyway's transaction) under the same names. The IF NOT EXISTS
--- below then makes this migration a no-op when Flyway runs it; no manual
--- flyway_schema_history edit is needed.
+-- production database, build them out-of-band with CREATE INDEX CONCURRENTLY (not
+-- allowed inside Flyway's transaction) under the same names, after migrating to V56
+-- (flyway -target=56): they index columns V53 and V55 add. The IF NOT EXISTS below
+-- then makes this migration a no-op when Flyway runs it; no manual
+-- flyway_schema_history edit is needed. The steps are in
+-- docs/_docs/other-guides/applying-database-migrations.md.
 CREATE INDEX IF NOT EXISTS i_proc_slots_pkjob
     ON proc (pk_job) WHERE int_slots_reserved > 0;
 

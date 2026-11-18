@@ -106,7 +106,10 @@ Cuebot launches a slot frame with 0 cores. An RQD that predates slot-based booki
 Python or Rust, refuses to launch a frame with 0 cores, so upgrade RQD on a host before
 you give it a concurrent slots limit. Roll out in this order:
 
-1. Upgrade Cuebot. Its migrations add the slot columns.
+1. Upgrade Cuebot. Its migrations add the slot columns, and V57 adds indexes for
+   reading slot usage. On a large database, build V57's indexes concurrently, as
+   [Applying database migrations](/docs/other-guides/applying-database-migrations/#v57-and-slot-based-booking)
+   describes, so they don't lengthen the downtime.
 2. Upgrade RQD on the hosts that will become slot hosts.
 3. Set those hosts' concurrent slots limits.
 
