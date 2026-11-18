@@ -126,6 +126,25 @@ class GroupDialogTests(unittest.TestCase):
 
         self.assertIsNone(dialog._maxSlotsCheck)
 
+    def test_savesGpuLimits(self):
+        # The gpu requests carry int32 fields, which reject a float.
+        group = self._group(max_slots=-1)
+        dialog = self._modifyDialog(group)
+        for check, value, gpus in (
+                (dialog._defaultJobMinGpusCheck, dialog._defaultJobMinGpusValue, 1),
+                (dialog._defaultJobMaxGpusCheck, dialog._defaultJobMaxGpusValue, 2),
+                (dialog._minGpusCheck, dialog._minGpusValue, 3),
+                (dialog._maxGpusCheck, dialog._maxGpusValue, 4)):
+            check.setChecked(True)
+            value.setValue(gpus)
+
+        dialog.accept()
+
+        self.assertEqual(1, group.stub.SetDefaultJobMinGpus.call_args[0][0].min_gpus)
+        self.assertEqual(2, group.stub.SetDefaultJobMaxGpus.call_args[0][0].max_gpus)
+        self.assertEqual(3, group.stub.SetMinGpus.call_args[0][0].min_gpus)
+        self.assertEqual(4, group.stub.SetMaxGpus.call_args[0][0].max_gpus)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -215,22 +215,22 @@ class GroupDialog(QtWidgets.QDialog):
 
         self.__setValue(self._defaultJobMinGpusCheck,
                         __group.setDefaultJobMinGpus,
-                        float(self._defaultJobMinGpusValue.value()),
+                        int(self._defaultJobMinGpusValue.value()),
                         __group.data.default_job_min_gpus, -1)
 
         self.__setValue(self._defaultJobMaxGpusCheck,
                         __group.setDefaultJobMaxGpus,
-                        float(self._defaultJobMaxGpusValue.value()),
+                        int(self._defaultJobMaxGpusValue.value()),
                         __group.data.default_job_max_gpus, -1)
 
         self.__setValue(self._minGpusCheck,
                         __group.setMinGpus,
-                        float(self._minGpusValue.value()),
+                        int(self._minGpusValue.value()),
                         __group.data.min_gpus, 0)
 
         self.__setValue(self._maxGpusCheck,
                         __group.setMaxGpus,
-                        float(self._maxGpusValue.value()),
+                        int(self._maxGpusValue.value()),
                         __group.data.max_gpus, -1)
 
         self.close()
