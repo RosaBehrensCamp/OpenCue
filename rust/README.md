@@ -34,6 +34,11 @@ Example on **Ubuntu**, you can use apt:
 sudo apt-get install protobuf-compiler
 ```
 
+The protos use proto3 `optional` fields, which need `protoc` 3.12 or newer (3.15 or newer
+recommended). Check with `protoc --version`. If your distribution's package is older (for example
+Ubuntu 20.04 or RHEL/Rocky 8), install a release binary from
+[GitHub](https://github.com/protocolbuffers/protobuf/releases) instead.
+
 2. Build the entire project
 ```bash
 cd OpenCue/rust

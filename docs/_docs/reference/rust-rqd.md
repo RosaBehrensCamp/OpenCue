@@ -111,6 +111,11 @@ If you need to customize the build or contribute to development, you can build f
    sudo yum install protobuf-compiler
    ```
 
+   The protos use proto3 `optional` fields, which need `protoc` 3.12 or newer (3.15 or newer
+   recommended). Check with `protoc --version`. If your distribution's package is older (for
+   example Ubuntu 20.04, CentOS 7 or RHEL/Rocky 8), install a release binary from
+   [GitHub](https://github.com/protocolbuffers/protobuf/releases) instead.
+
 #### Build Instructions
 
 1. Navigate to the Rust directory:
@@ -475,7 +480,8 @@ Typical improvements over Python RQD:
 
 ### Common Issues
 
-1. **Build failures**: Ensure protobuf compiler is installed
+1. **Build failures**: Ensure protobuf compiler 3.12 or newer is installed. `Explicit 'optional'
+   labels are disallowed in the Proto3 syntax` means your `protoc` is older than that
 2. **Connection errors**: Verify Cuebot hostname and network connectivity
 3. **Permission denied**: Check file permissions and user privileges
 4. **Resource detection**: Verify system monitoring works with `sysinfo` crate

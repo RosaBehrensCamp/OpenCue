@@ -104,6 +104,8 @@ brew install protobuf
 sudo dnf install protobuf protobuf-devel protobuf-compiler
 ```
 
+The protos use proto3 `optional` fields, which need `protoc` 3.12 or newer (3.15 or newer recommended). Check with `protoc --version`. If your distribution's package is older (for example Ubuntu 20.04 or Rocky Linux 8), install a release binary from [GitHub](https://github.com/protocolbuffers/protobuf/releases) instead.
+
 - **Install the Go protobuf plugins** that `go.mod` lists as tools, at the versions it pins (from `rest_gateway/opencue_gateway`):
 
 ```bash
@@ -784,6 +786,9 @@ sudo apt-get install protobuf-compiler  # Ubuntu/Debian
 brew install protobuf                    # macOS
 sudo dnf install protobuf-compiler       # Rocky Linux/CentOS
 ```
+
+**`Explicit 'optional' labels are disallowed in the Proto3 syntax`:**
+Your `protoc` is older than 3.12, the minimum for the protos' proto3 `optional` fields. Install a newer release binary from [GitHub](https://github.com/protocolbuffers/protobuf/releases).
 
 **Go module issues:**
 ```bash

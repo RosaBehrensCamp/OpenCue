@@ -48,6 +48,8 @@ fn build_protobuf() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rerun-if-changed={}", name);
     }
     tonic_build::configure()
+        // protoc 3.12-3.14 need this for proto3 `optional` fields; newer versions ignore it
+        .protoc_arg("--experimental_allow_proto3_optional")
         .type_attribute("Stat", "#[derive(serde::Deserialize, serde::Serialize)]")
         .type_attribute("Statm", "#[derive(serde::Deserialize, serde::Serialize)]")
         .type_attribute("Status", "#[derive(serde::Deserialize, serde::Serialize)]")
